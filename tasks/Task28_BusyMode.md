@@ -34,31 +34,19 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现默认 Busy Mode。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 目标已有活动会话且 `allow_interrupt = false` 时：返回 `BUSY`，保持原会话不变
+- BUSY 包：SessionId = 呼叫方在 VOICE_START 中使用的值，**payload 为空**（不回传第三方会话信息）
+- 呼叫方收到 BUSY → `FAILED(TARGET_BUSY) → IDLE`，产生领域层的 busy 结果
+- **不生成历史记录**
+- 判定完全在被叫方，呼叫方不做本地拒绝
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- A → B 通话中，C → B 收到 BUSY。
+- A 与 B 的会话不受影响。
+- C 端不产生历史记录。
+- 有单元测试覆盖 busy 判定路径。

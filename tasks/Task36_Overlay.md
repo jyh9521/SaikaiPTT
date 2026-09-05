@@ -34,31 +34,24 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现系统悬浮窗。
+
+> 顺序说明：本任务原为 Task31，现移到 Home 页面之后——悬浮窗点击需要打开「相关界面」，而该界面在 Task32 才存在。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 权限感知：未授予时不显示，且**必须由通知承担降级提示**（Task31 已实现）
+- 常态绿色，收到 PTT 变红色并显示远程用户名
+- 通信结束恢复绿色
+- 点击打开 App 对应界面
+- **单一轻量 View / ComposeView，不创建多个 Window**
+- 动画节制：允许有限时长的闪烁，**禁止持续动画**
+- **不得持有通信状态**，只反映状态
+- 后台运行时不产生高频重绘
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 后台收到 PTT 时颜色正确变化并显示名称。
+- 权限关闭时不显示，且通知降级提示生效。
+- 点击后正确进入 App。
+- 长时间后台运行时悬浮窗不产生可观测的 CPU 占用。

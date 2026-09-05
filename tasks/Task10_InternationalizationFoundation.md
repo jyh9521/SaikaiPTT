@@ -34,31 +34,22 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+建立 i18n 基础设施。**本任务只落地 `ja` 与 `en` 两种语言。**
+
+> 顺序说明：`zh-CN` / `my` / `bn` 的完整翻译推迟到 Task35（Settings UI）之后统一进行。在 UI 尚未定型时翻译五种语言，会导致同一批文案被反复重译。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 资源限定符约定：`values/`（日语，默认）、`values-en/`、后续 `values-zh-rCN/`、`values-my/`、`values-bn/`
+- `res/xml/locales_config.xml` 列出全部五种语言
+- 语言切换使用 `AppCompatDelegate.setApplicationLocales()`（Android 13+ 由系统托管，13 以下由 AndroidX 兼容层处理）
+- 语言选择同时写入 DataStore 的 `app_language`，供通知与悬浮窗等应用外组件取值
+- 新建 UI / 业务代码中**禁止硬编码用户可见字符串**
+- 复数使用 Android plural resources；日期时间与数字按 Locale 格式化
+- 通知与悬浮窗文案从一开始就走资源
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 一个内部演示页面可在 `ja` / `en` 之间切换且立即生效。
+- 切换结果在重启后保持。
+- lint 中的硬编码字符串检查开启且通过。

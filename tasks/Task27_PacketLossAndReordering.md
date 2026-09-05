@@ -34,31 +34,24 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+增强实时语音流的网络鲁棒性。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
+在 Task26 的 jitter buffer 之上完善：
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+- 丢包：继续播放后续帧，**不得无限等待缺失帧**
+- 乱序：按 sequence 重排；已越过播放点的迟到包直接丢弃
+- 重复：同一 `SessionId + Sequence` 只处理一次
+- Session mismatch：非当前会话的包丢弃且不记日志
+- Sender mismatch：同一 SessionId 下发送方变化必须拒绝
+- **回绕安全的 sequence 比较**（Task11 的 `isNewer`）
+- 不对语音帧做 TCP 式重传
 
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+统计每次会话的丢包数（`frameCount` 与实收帧数之差），写入 Debug 日志与开发者信息页。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 模拟丢包 / 乱序 / 重复 / 会话不匹配，均不 Crash、不死锁。
+- 长时间运行跨越 sequence 回绕边界时播放正常。
+- 丢包统计准确。

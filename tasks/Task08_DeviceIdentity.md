@@ -34,31 +34,20 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现持久化的 UUID v4 Device ID。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 首次初始化时生成一次。
+- 通过 Task07 的 `SettingsRepository` 存储，**不自建持久化**。
+- App 重启、设备重启、IP 变化、WiFi 变化均不改变。
+- 不使用 MAC / IMEI / Serial。
+- 提供 `DeviceIdentityProvider` 接口，Application scope 单例。
+- 同时提供 16 字节二进制形式（协议使用，`ADR-003`）与字符串形式（存储与调试使用）。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 生成合法 UUID v4。
+- 重复读取返回相同 ID。
+- 二进制与字符串形式可互相转换且往返一致。
+- 单元测试覆盖首次生成与持久化。

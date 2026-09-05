@@ -34,31 +34,22 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现 Foreground Service 的持续通知。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 稳定的 notification channel（重要性设为不打扰级别）
+- 本地化文案，来自资源
+- 常态文案：`SaikaiPTT が動作中です`
+- **接收中的降级提示**（无悬浮窗权限时）：`SaikaiPTT — 受信中：<名前>`，通信结束后恢复常态
+- **每次会话最多更新 2 次**（开始、结束），禁止逐秒刷新
+- 点击通知打开对应界面
+- Android 13+ 的 `POST_NOTIFICATIONS` 未授予时，服务仍需正常运行（只是用户看不到状态）
+- 不同 Android 版本的行为差异需实测记录
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 服务运行期间通知持续存在。
+- 不产生重复通知或刷屏。
+- 未授予通知权限时服务不崩溃、不停止。
+- 接收时通知内容按设计更新。

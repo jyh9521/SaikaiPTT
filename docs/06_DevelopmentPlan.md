@@ -13,14 +13,7 @@
 - 未验证前继续堆功能
 - 用大量临时代码快速拼出 Demo
 
-每个 Task 都应具备：
-
-- 明确目标
-- 明确输入
-- 明确输出
-- 明确验收标准
-- 明确测试要求
-- 明确完成条件
+每个 Task 都具备：明确目标、明确输入、明确输出、明确验收标准、明确测试要求、明确完成条件。
 
 完成一个 Task 后：
 
@@ -35,27 +28,81 @@
 
 ---
 
-# 2. Development Strategy
+# 2. 规范性 ADR
 
-整体分为：
+以下 ADR 是本计划的前置条件，**必须在 Task02 之前全部处于 Accepted 状态**。
+
+| ADR | 主题 | 影响的 Task |
+|---|---|---|
+| ADR-001 | 设备发现策略（纯 UDP 广播） | 11, 16 |
+| ADR-002 | 传输层与端口方案 | 05, 14 |
+| ADR-003 | 协议二进制线格式 | 11, 12, 19, 24 |
+| ADR-004 | 音频参数与 AudioFocus 策略 | 05, 20~24, 38 |
+| ADR-005 | 前台服务、Android 兼容与电源锁 | 02, 15, 25, 30 |
+| ADR-006 | 离线日语 ASR 引擎与模型分发 | 02, 03, 41 |
+
+开发过程中还会新增：
+
+| ADR | 由哪个 Task 产生 |
+|---|---|
+| ADR-007 | Task23（Opus 库选型与 16 KB 对齐验证） |
+| ADR-008 | Task41（ASR 引擎与模型复核结论） |
+
+**ADR 与 `docs/` 冲突时，以 ADR 为准。**
+
+---
+
+# 3. Development Strategy
 
 ```text
-Phase 0  文档与工程基础
-Phase 1  项目骨架
-Phase 2  基础核心
-Phase 3  网络发现与状态
-Phase 4  音频与 PTT
-Phase 5  后台服务
-Phase 6  UI
-Phase 7  通信记录
-Phase 8  离线 ASR
-Phase 9  联调与性能
-Phase 10 测试与发布
+Phase 0   Task 01        文档与工程基线
+Phase 1   Task 02 - 04   项目骨架
+Phase 2   Task 05 - 10   基础核心（配置、日志、存储、身份、i18n）
+Phase 3   Task 11 - 13   协议与领域模型
+Phase 4   Task 14 - 18   网络栈与服务骨架
+Phase 5   Task 19 - 24   会话状态机与音频基础
+Phase 6   Task 25 - 30   PTT 收发、Busy、强插、后台服务
+Phase 7   Task 31 - 36   UI 与系统集成
+Phase 8   Task 37 - 40   通信记录
+Phase 9   Task 41        离线 ASR
+Phase 10  Task 42 - 44   集成、性能、发布
 ```
 
 ---
 
-# 3. Task Rules
+# 4. 编号变更说明（重要）
+
+本计划经过一次文档一致性审查后重新编号。**编号即执行顺序**，不需要另外对照顺序表。
+
+主要调整：
+
+| 调整 | 原因 |
+|---|---|
+| DataStore 提前到 Task07（原 Task10） | Device Identity 与 LocalUser 都依赖 DataStore，否则两者会各自实现一遍持久化 |
+| 网络接收循环提前到 Task14（原 Task17） | Discovery 与 Heartbeat 都要在这套 socket 与管线上收发 |
+| **新增 Task15 前台服务骨架** | 让 socket 与生命周期从第一天起归 Service 所有，避免 PTT 完成后再整体迁移属主——这是原计划最大的返工来源 |
+| 网络恢复后移到 Task18（原 Task16） | socket 在 Task14 才存在、属主在 Task15 才确定 |
+| 最小 jitter buffer 并入 Task26 | 先「收到就播」再插入缓冲等于重写喂数据路径 |
+| **新增 Task34 权限引导** | `01_PRD §24/§50` 要求的完整权限流程原先无人负责 |
+| Overlay 后移到 Task36（原 Task31） | 悬浮窗点击需要打开的界面在 Task32 才存在 |
+| 手动删除并入 Task40 | `01_PRD §54` 要求的删除能力原先无人负责 |
+| ASR 后移到 Task41（原 Task38） | 默认关闭的可选功能，优先级低于核心通信与历史 |
+| 原 Task40 拆为 Task42 / 43 / 44 | 集成、性能、发布是三件事，与「一个 Task 一个 commit」的纪律相符 |
+
+新旧编号对照：
+
+```text
+新 01←01  02←02  03←03  04←04  05←05  06←06  07←10  08←07
+   09←08  10←09  11←11  12←12  13←13  14←17  15←新增
+   16←14  17←15  18←16  19←18  20←19  21←20  22←21  23←22
+   24←23  25←24  26←25  27←26  28←27  29←28  30←29  31←30
+   32←32  33←33  34←新增  35←34  36←31  37←35  38←36  39←37
+   40←39  41←38  42←40a  43←40b  44←40c
+```
+
+---
+
+# 5. Task Rules
 
 当收到：
 
@@ -63,1070 +110,190 @@ Phase 10 测试与发布
 Execute TaskXX
 ```
 
-Claude 必须：
+必须：
 
 1. 阅读 `.claude/CLAUDE.md`
-2. 阅读相关 docs
-3. 阅读当前 Task
-4. 检查现有代码
-5. 明确依赖
-6. 只实现当前 Task
-7. 运行必要测试
-8. 汇报修改内容
-9. 汇报测试结果
+2. 阅读相关 `docs/`
+3. **阅读该 Task 的 Required Reading 中列出的 ADR**
+4. 阅读当前 Task
+5. 检查现有代码
+6. 明确依赖
+7. 只实现当前 Task
+8. 运行必要测试
+9. 汇报修改内容与测试结果
 10. 停止
 
 不得主动执行后续 Task。
 
 ---
 
-# 4. Task 01 — Project Repository Baseline
+# 6. Task 清单
 
-目标：
+## Phase 0 — 基线
 
-确认 Git 仓库基础状态。
+| # | Task | 产出 |
+|---|---|---|
+| 01 | ProjectRepositoryBaseline | 仓库、`.gitignore`、文档与 ADR 结构确认，工作区干净 |
 
-工作：
+## Phase 1 — 项目骨架
 
-- 检查 repository
-- 检查 branch
-- 检查已有文档
-- 确认 .gitignore
-- 确认 README
-- 确认 CLAUDE.md
+| # | Task | 产出 |
+|---|---|---|
+| 02 | AndroidProjectInitialization | 可编译工程；**Manifest 的 FGS 类型与权限一次写对**；NDK/ABI 预留 |
+| 03 | BuildAndDependencyBaseline | Version Catalog，**版本全部显式钉死**，可重复构建 |
+| 04 | ModuleSkeleton | `app` + `core` 两个 module，其余为 package；手写 DI 容器骨架 |
 
-禁止：
+## Phase 2 — 基础核心
 
-创建 Android 业务代码。
+| # | Task | 产出 |
+|---|---|---|
+| 05 | ConfigurationSystem | 集中配置，含协议 / 端口 / 心跳 / 会话 / 音频 / 限流全部数值 |
+| 06 | LoggingSystem | 分类日志、Release 禁用 debug、频率限制 |
+| 07 | DataStoreSettings | `SettingsRepository`，全部 key 与默认值，损坏值安全降级 |
+| 08 | DeviceIdentity | UUID v4，二进制与字符串双形式 |
+| 09 | LocalUserManagement | 用户名 CRUD、Active User 自愈、长度校验 |
+| 10 | InternationalizationFoundation | i18n 基础设施；**本阶段只做 `ja` / `en`** |
 
-验收：
+## Phase 3 — 协议与领域模型
 
-仓库结构清晰。
+| # | Task | 产出 |
+|---|---|---|
+| 11 | ProtocolDataStructures | 72 字节头部编解码，**逐字节断言测试** |
+| 12 | ProtocolValidation | 12 步校验顺序，非法输入零 Crash |
+| 13 | PeerDomainModel | Peer 状态机，`BUSY` 由心跳驱动 |
 
----
+## Phase 4 — 网络栈与服务骨架
 
-# 5. Task 02 — Android Project Initialization
+| # | Task | 产出 |
+|---|---|---|
+| 14 | NetworkReceiveLoop | 两个 socket、两个接收线程、统一 decode/validate 管线 |
+| 15 | ForegroundServiceSkeleton | **服务持有 socket 与 MulticastLock**，启停可回滚 |
+| 16 | LanDiscovery | UDP 广播发现 + 即时应答，两台真机互相发现 |
+| 17 | HeartbeatPresence | 广播心跳、超时判定、**忙线状态通告** |
+| 18 | NetworkRecovery | 断线重连、IP 变化、socket 重建 |
 
-目标：
+## Phase 5 — 会话与音频基础
 
-建立 Android 工程。
+| # | Task | 产出 |
+|---|---|---|
+| 19 | SessionManager | 发送/接收状态机，**VOICE_ACCEPT 闭合**，原子会话所有权 |
+| 20 | AudioCapture | AudioRecord 抽象，16k/20ms |
+| 21 | AudioPlayback | AudioTrack 抽象 + AudioFocus 策略 |
+| 22 | VoiceCodecInterface | 可替换 codec 接口 + fake 实现 |
+| 23 | OpusIntegration | Opus 集成，**16 KB 对齐验证**，产出 ADR-007 |
+| 24 | VoicePacketization | 语音包打包解析，Sequence 规则 |
 
-要求：
+## Phase 6 — PTT 与后台
 
-- Kotlin
-- Gradle Kotlin DSL
-- Android application module
-- Android 11 minimum
-- latest stable compile/target SDK
-- 基本 Compose 环境
-- lint
-- unit test infrastructure
+| # | Task | 产出 |
+|---|---|---|
+| 25 | BasicPttSender | 发送端 PTT，**按下即录**，FGS 类型运行时提升 |
+| 26 | BasicPttReceiver | 接收端 PTT，**含最小 jitter buffer** |
+| 27 | PacketLossAndReordering | 丢包/乱序/重复/回绕 |
+| 28 | BusyMode | 被叫方判定，返回 BUSY，不产生记录 |
+| 29 | ForceInterrupt | **接收方开关**，原子所有权转移，竞态处理 |
+| 30 | ForegroundServiceCompletion | 完整组件编排、电源锁复核、开机启动 |
 
-暂不实现：
+## Phase 7 — UI
 
-- Network
-- Audio
-- Room business logic
+| # | Task | 产出 |
+|---|---|---|
+| 31 | Notification | 持续通知 + **无悬浮窗时的降级提示** |
+| 32 | MainUI | Home、Peer 列表、目标选择、PTT 按钮 |
+| 33 | UsernameUI | 首启创建与用户名管理 |
+| 34 | PermissionOnboarding | **分步权限引导 + 权限状态页** |
+| 35 | SettingsUI | 设置页 + **补齐五种语言与字体实测** |
+| 36 | Overlay | 悬浮窗，绿/红状态 |
 
-验收：
+## Phase 8 — 通信记录
 
-空工程成功 Build。
+| # | Task | 产出 |
+|---|---|---|
+| 37 | HistoryDatabase | Room schema、索引、migration |
+| 38 | AudioRecordingHistory | **不做二次编码**，有界队列隔离，失败不影响 PTT |
+| 39 | AudioPlaybackUI | History Detail 与播放 |
+| 40 | HistoryManagement | 搜索、收藏、未读、**手动/批量删除**、清理 |
 
----
+## Phase 9 — ASR
 
-# 6. Task 03 — Build and Dependency Baseline
+| # | Task | 产出 |
+|---|---|---|
+| 41 | OfflineJapaneseASR | 引擎复核（ADR-008）、模型下载、队列与重试 |
 
-目标：
+## Phase 10 — 发布
 
-建立稳定依赖管理。
-
-工作：
-
-- Version Catalog
-- dependency versions
-- repositories
-- build types
-- Debug / Release
-
-要求：
-
-尽量减少第三方依赖。
-
-验收：
-
-Debug / Release 均可编译。
-
----
-
-# 7. Task 04 — Module Skeleton
-
-建立最终架构需要的必要模块。
-
-根据 Architecture 文档确定：
-
-- core
-- common
-- network
-- discovery
-- heartbeat
-- protocol
-- audio
-- service
-- storage
-- ui
-- settings
-- logger
-
-如果某些模块当前没有真实边界：
-
-允许暂不拆成独立 Gradle module，但必须保持 package boundary。
-
-验收：
-
-依赖方向正确。
+| # | Task | 产出 |
+|---|---|---|
+| 42 | IntegrationAndRegression | 完整集成回归 + 测试报告 |
+| 43 | PerformanceMeasurement | 真机性能实测，对照 `01_PRD §41` 判定 |
+| 44 | ReleasePreparation | 发布检查、README、CHANGELOG、Sign-off |
 
 ---
 
-# 8. Task 05 — Configuration System
+# 7. Task Dependency Rules
 
-实现统一 Config。
-
-包含：
-
-- protocol version
-- network ports
-- heartbeat interval
-- peer timeout
-- discovery timing
-- audio parameters
-- retry limits
-- logging settings
-
-禁止 magic numbers。
-
-验收：
-
-关键配置可集中管理。
-
----
-
-# 9. Task 06 — Logging System
-
-实现：
+核心依赖顺序：
 
 ```text
-Logger.d()
-Logger.i()
-Logger.w()
-Logger.e()
+Project baseline
+ ↓
+Build / Modules
+ ↓
+Config / Logging / DataStore
+ ↓
+Identity / LocalUser / i18n
+ ↓
+Protocol
+ ↓
+Peer model
+ ↓
+Network stack  ──►  Foreground Service skeleton
+ ↓
+Discovery / Heartbeat / Recovery
+ ↓
+Session state machine
+ ↓
+Audio / Codec / Packetization
+ ↓
+PTT send / receive
+ ↓
+Busy / Force Interrupt
+ ↓
+Service completion
+ ↓
+UI / Permissions / Overlay
+ ↓
+History / Recording / Playback / Management
+ ↓
+ASR
+ ↓
+Integration → Performance → Release
 ```
 
-要求：
+禁止跳过核心依赖直接实现高级功能。
 
-- Debug 可详细输出
-- Release 禁用 verbose/debug
-- 支持 category
-- 不记录音频 payload
-- 不产生高频日志
-
-验收：
-
-可以查看 Network / Protocol / Audio / Service 日志。
+**Task11 是硬门槛**：在 ADR-001 / 002 / 003 全部 Accepted 之前不得开始协议编码。协议头部与包类型集合一旦写错，会连锁影响 Task12、13、19、24~29。
 
 ---
 
-# 10. Task 07 — Device Identity
+# 8. Git Strategy
 
-实现：
-
-UUID v4 Device ID。
-
-要求：
-
-- 首次生成
-- DataStore 保存
-- 重启不改变
-- IP 改变不影响
-- WiFi 改变不影响
-
-测试：
-
-重启应用。
-
-重启设备。
-
-确认 Device ID 不变。
-
----
-
-# 11. Task 08 — Local User Management
-
-实现：
-
-LocalUser。
-
-支持：
-
-- 创建
-- 修改
-- 删除
-- 切换
-- Active User
-
-规则：
-
-不能删除最后一个用户。
-
-验收：
-
-重新启动后恢复。
-
----
-
-# 12. Task 09 — Internationalization Foundation
-
-实现：
-
-- Japanese
-- Simplified Chinese
-- English
-- Burmese
-- Bengali
-
-要求：
-
-所有 UI 字符串 externalized。
-
-禁止硬编码。
-
-验收：
-
-至少能够在测试页面切换五种语言。
-
----
-
-# 13. Task 10 — DataStore Settings
-
-建立 SettingsRepository。
-
-保存：
-
-- Device ID
-- users
-- active user
-- language
-- interrupt mode
-- ASR enabled
-- history retention
-- overlay preference
-
-验收：
-
-设置重启后保持。
-
----
-
-# 14. Task 11 — Protocol Data Structures
-
-建立协议：
-
-- Packet
-- PacketHeader
-- PacketType
-- Packet validation
-- Packet encoding
-- Packet decoding
-
-至少支持：
-
-DISCOVERY
-HEARTBEAT
-PING
-PONG
-VOICE_START
-VOICE_DATA
-VOICE_END
-BUSY
-FORCE_INTERRUPT
-
-验收：
-
-encode/decode tests。
-
----
-
-# 15. Task 12 — Protocol Validation
-
-实现：
-
-- version validation
-- packet size validation
-- device ID validation
-- target validation
-- payload limit
-- unknown packet handling
-- sequence validation
-
-验收：
-
-非法数据不会 Crash。
-
----
-
-# 16. Task 13 — Peer Domain Model
-
-建立 Peer：
-
-```text
-Peer
-- deviceId
-- userName
-- ip
-- ports
-- protocolVersion
-- state
-- lastSeen
-```
-
-状态：
-
-- DISCOVERED
-- ONLINE
-- OFFLINE
-- BUSY
-- COMMUNICATING
-
-验收：
-
-状态转换有明确规则。
-
----
-
-# 17. Task 14 — LAN Discovery
-
-实现：
-
-DiscoveryService。
-
-优先：
-
-Android NSD / mDNS。
-
-如果实际验证需要：
-
-UDP discovery fallback。
-
-要求：
-
-- 自动发现
-- endpoint 更新
-- duplicate device 去重
-- Device ID 作为身份
-
-验收：
-
-两台真实设备互相发现。
-
----
-
-# 18. Task 15 — Heartbeat and Presence
-
-实现：
-
-HeartbeatService。
-
-要求：
-
-- 周期 heartbeat
-- lastSeen
-- timeout
-- online/offline
-- 不与 Discovery 混写
-
-验收：
-
-两台设备可自动判断对方在线/离线。
-
----
-
-# 19. Task 16 — Network Recovery
-
-处理：
-
-- WiFi disconnect
-- reconnect
-- IP change
-- socket recreation
-- discovery restart
-- heartbeat restart
-
-验收：
-
-断开 WiFi → 恢复 → 自动重新发现。
-
----
-
-# 20. Task 17 — Network Receive Loop
-
-建立统一 UDP 接收路径。
-
-职责：
-
-```text
-Datagram
-↓
-Decode
-↓
-Validate
-↓
-Event
-```
-
-不得直接修改 UI。
-
-验收：
-
-能接收和分发控制包。
-
----
-
-# 21. Task 18 — Session Manager
-
-实现：
-
-PTT Session state machine。
-
-发送端：
-
-- IDLE
-- REQUESTING
-- TRANSMITTING
-- ENDING
-- FAILED
-
-接收端：
-
-- IDLE
-- RECEIVING
-- ENDING
-- FAILED
-
-加入：
-
-Session ID
-
-Sequence Number
-
-验收：
-
-状态转换测试完整。
-
----
-
-# 22. Task 19 — Audio Capture
-
-实现：
-
-AudioRecorder。
-
-使用：
-
-AudioRecord。
-
-目标：
-
-低延迟。
-
-要求：
-
-- 正确 lifecycle
-- buffer 管理
-- microphone error
-- cancellation
-- release
-
-验收：
-
-真实设备可稳定采集声音。
-
----
-
-# 23. Task 20 — Audio Playback
-
-实现：
-
-AudioPlayer。
-
-使用：
-
-AudioTrack。
-
-要求：
-
-- low latency
-- start/stop
-- buffer
-- release
-
-验收：
-
-真实设备能够稳定播放测试音频。
-
----
-
-# 24. Task 21 — Voice Codec Interface
-
-定义：
-
-```text
-VoiceCodec
-```
-
-提供：
-
-encode / decode。
-
-默认计划：
-
-Opus。
-
-Codec 必须可替换。
-
-验收：
-
-Codec 单元测试。
-
----
-
-# 25. Task 22 — Opus Integration
-
-集成：
-
-Opus。
-
-要求：
-
-- low bitrate
-- low latency
-- Android 11 compatibility
-- minimal overhead
-
-如果目标设备兼容性存在问题：
-
-记录 ADR。
-
-验收：
-
-PCM → Opus → PCM 测试。
-
----
-
-# 26. Task 23 — Voice Packetization
-
-实现：
-
-VOICE_START
-
-VOICE_DATA
-
-VOICE_END。
-
-加入：
-
-- Session ID
-- Sequence
-- Timestamp
-
-要求：
-
-避免过大 UDP packet。
-
-验收：
-
-连续音频 frame 可发送和恢复。
-
----
-
-# 27. Task 24 — Basic PTT Sender
-
-实现：
-
-按住：
-
-Start。
-
-松开：
-
-Stop。
-
-流程：
-
-```text
-PTT press
-↓
-target validation
-↓
-VOICE_START
-↓
-AudioRecord
-↓
-Opus
-↓
-UDP
-```
-
-验收：
-
-A 能把声音发送给 B。
-
----
-
-# 28. Task 25 — Basic PTT Receiver
-
-实现：
-
-VOICE_START。
-
-VOICE_DATA。
-
-VOICE_END。
-
-接收：
-
-自动播放。
-
-无需接受按钮。
-
-验收：
-
-B 自动听到 A。
-
----
-
-# 29. Task 26 — Packet Loss and Reordering
-
-实现：
-
-- sequence tracking
-- duplicate drop
-- late packet drop
-- small jitter buffer
-- missing packet handling
-
-验收：
-
-模拟：
-
-- 丢包
-- 乱序
-- 重复
-
-不会崩溃。
-
----
-
-# 30. Task 27 — Busy Mode
-
-实现：
-
-目标忙线检测。
-
-Busy request：
-
-返回：
-
-BUSY。
-
-验收：
-
-A → B 通话。
-
-C → B：
-
-C 得到 BUSY。
-
----
-
-# 31. Task 28 — Force Interrupt
-
-实现：
-
-Force Interrupt。
-
-要求：
-
-- 默认关闭
-- 原 Session 结束
-- 新 Session 建立
-- Race condition 防护
-
-验收：
-
-强插测试通过。
-
----
-
-# 32. Task 29 — Foreground Service
-
-实现：
-
-Foreground Communication Service。
-
-负责：
-
-- background lifecycle
-- network coordination
-- PTT receiving
-- notification
-
-不把业务逻辑全部放 Service。
-
-验收：
-
-App 在后台仍能保持网络接收。
-
----
-
-# 33. Task 30 — Notification
-
-实现持续通知：
-
-“SaikaiPTT 正在运行”
-
-要求：
-
-- localized
-- low frequency updates
-- no spam
-
-验收：
-
-Background 服务运行正常。
-
----
-
-# 34. Task 31 — Overlay
-
-实现：
-
-系统悬浮窗。
-
-正常：
-
-绿色。
-
-Incoming：
-
-红色。
-
-显示：
-
-remote username。
-
-点击：
-
-打开 App。
-
-验收：
-
-后台收到 PTT 时颜色变化。
-
----
-
-# 35. Task 32 — Main UI
-
-实现：
-
-Home。
-
-包含：
-
-- current user
-- peer list
-- selected target
-- network state
-- PTT
-
-验收：
-
-核心操作完整。
-
----
-
-# 36. Task 33 — Username UI
-
-实现：
-
-- first launch name setup
-- name management
-- switch user
-
-验收：
-
-没有用户名：
-
-不能 PTT。
-
----
-
-# 37. Task 34 — Settings UI
-
-实现：
-
-- language
-- interrupt mode
-- ASR
-- history retention
-- permissions
-- background settings
-
-验收：
-
-所有设置能够保存。
-
----
-
-# 38. Task 35 — History Database
-
-实现：
-
-Room。
-
-CommunicationRecord。
-
-支持：
-
-- timestamp
-- direction
-- users
-- session
-- audio path
-- transcript
-- read
-- favorite
-- status
-
-验收：
-
-PTT 完成后可以保存记录。
-
----
-
-# 39. Task 36 — Audio Recording History
-
-将 PTT 与本地录音结合。
-
-要求：
-
-- finalize file
-- Room metadata
-- failed-save handling
-- orphan handling
-
-验收：
-
-每段有效 PTT 都可以回放。
-
----
-
-# 40. Task 37 — Audio Playback UI
-
-实现：
-
-History Detail。
-
-支持：
-
-- play
-- pause
-- resume
-- stop
-- progress
-
-验收：
-
-录音可以正确播放。
-
----
-
-# 41. Task 38 — Offline Japanese ASR
-
-集成本地日语 ASR。
-
-推荐：
-
-Vosk。
-
-要求：
-
-- offline
-- Japanese
-- no network
-- queue
-- retry
-- failure state
-- low priority compared with PTT
-
-默认：
-
-关闭。
-
-验收：
-
-录音完成后能够生成日语字幕。
-
----
-
-# 42. Task 39 — History Search and Favorites
-
-实现：
-
-- username search
-- transcript search
-- favorite
-- unread
-- retention cleanup
-
-如果全文搜索复杂：
-
-优先简单可靠实现。
-
-验收：
-
-可以快速找到目标记录。
-
----
-
-# 43. Task 40 — Integration, Performance and Release
-
-最终阶段：
-
-## Network
-
-验证：
-
-- discovery
-- heartbeat
-- reconnect
-- IP change
-- multiple peers
-
-## PTT
-
-验证：
-
-- send
-- receive
-- busy
-- force interrupt
-- loss
-- reorder
-- duplicate
-
-## Background
-
-验证：
-
-- foreground
-- background
-- screen off
-- device sleep
-- notification
-- overlay
-
-## Storage
-
-验证：
-
-- recording
-- playback
-- history
-- cleanup
-- orphan files
-
-## ASR
-
-验证：
-
-- Japanese recognition
-- queue
-- failure
-- retry
-- resource usage
-
-## Performance
-
-至少测试：
-
-低端 Android 11 / 4GB RAM / MTK P22 类设备
-
-以及：
-
-现代旗舰设备。
-
-测量：
-
-- startup
-- idle CPU
-- active PTT CPU
-- memory
-- battery
-- network traffic
-- latency
-- ASR processing time
-
-## Release
-
-完成：
-
-- lint
-- unit tests
-- integration tests
-- real device testing
-- README
-- CHANGELOG
-- release checklist
-- version code/name
-- debug logging check
-- permission review
-
-只有全部通过：
-
-才可以定义为：
-
-MVP Release Candidate。
-
----
-
-# 44. Git Strategy
-
-推荐：
-
-每个 Task：
-
-一个 commit。
-
-示例：
+每个 Task 一个 commit：
 
 ```text
 feat: implement device identity
-
-feat: implement LAN discovery
-
-feat: implement heartbeat
-
-feat: implement PTT sender
-
-feat: implement PTT receiver
-
+feat: implement LAN discovery over UDP broadcast
+feat: implement heartbeat and busy-state advertisement
+feat: implement PTT sender with pre-roll buffering
+feat: implement PTT receiver with jitter buffer
 feat: implement communication history
 ```
 
-文档：
+文档与决策：
 
 ```text
 docs: add protocol specification
-docs: add architecture specification
+docs: record ADR-007 opus library selection
 ```
 
 修 Bug：
@@ -1135,41 +302,34 @@ docs: add architecture specification
 fix: recover discovery after wifi reconnect
 ```
 
+不混合无关任务，不提交密钥。
+
 ---
 
-# 45. Task Completion Report
+# 9. Task Completion Report
 
-每次 Task 完成后：
-
-Claude 必须报告：
+每次 Task 完成后必须报告：
 
 ## Summary
-
 完成什么。
 
 ## Files Changed
-
 哪些文件。
 
 ## Tests
-
 运行了什么。
 
 ## Result
-
-成功/失败。
+成功 / 失败。
 
 ## Known Issues
-
 尚未解决的问题。
 
 ## Architecture Impact
+是否修改公共接口、协议、数据库、模块边界。**如有重大变化，必须创建 ADR。**
 
-是否修改公共接口、协议、数据库等。
-
-如果有重大变化：
-
-要求创建 ADR。
+## ADR
+本 Task 是否产生或引用了 ADR。
 
 最后：
 
@@ -1179,45 +339,7 @@ Claude 必须报告：
 
 ---
 
-# 46. Task Dependency Rules
-
-核心依赖顺序：
-
-```text
-Project
- ↓
-Core
- ↓
-Protocol
- ↓
-Discovery
- ↓
-Heartbeat
- ↓
-Session
- ↓
-Audio
- ↓
-PTT
- ↓
-Service
- ↓
-UI
- ↓
-History
- ↓
-ASR
- ↓
-Performance
- ↓
-Release
-```
-
-禁止跳过核心依赖直接实现高级功能。
-
----
-
-# 47. Definition of Done
+# 10. Definition of Done
 
 一个 Task 只有在以下条件全部满足后才算完成：
 
@@ -1226,47 +348,22 @@ Release
 - relevant tests pass
 - no known blocking error
 - architecture remains consistent
+- **相关 ADR 已阅读并遵循；如有偏离，已创建新 ADR**
 - documentation updated if necessary
 - no unrelated feature added
 
 ---
 
-# 48. Final Rule
+# 11. Final Rule
 
-开发过程中：
-
-不要追求：
-
-“尽快把所有功能写出来”。
-
-追求：
-
-“每完成一个阶段，就得到一个可信赖的系统”。
-
-SaikaiPTT 的开发路线必须始终遵循：
+开发过程中不要追求「尽快把所有功能写出来」，而要追求「每完成一个阶段，就得到一个可信赖的系统」。
 
 ```text
-Correct
-↓
-Stable
-↓
-Tested
-↓
-Optimized
-↓
-Extended
+Correct → Stable → Tested → Optimized → Extended
 ```
 
 而不是：
 
 ```text
-Feature
-↓
-Feature
-↓
-Feature
-↓
-Bug
-↓
-Rewrite
+Feature → Feature → Feature → Bug → Rewrite
 ```

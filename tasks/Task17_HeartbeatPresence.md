@@ -34,31 +34,27 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现在线状态与忙线状态通告。
+
+## Required Reading
+
+- `docs/03_Protocol.md §12`、`§13`
+- `docs/02_Architecture.md §22`
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- **广播**心跳，与 Discovery 共用 socket 与 payload 结构（不是逐 Peer 单播——N 台设备单播会产生 N×(N-1) 个包）
+- `heartbeatIntervalMs = 5000`，`peerTimeoutMs = 16000`（3 个周期 + 容差）
+- 任何来自该 Peer 的有效包都刷新 `lastSeen`
+- **单次丢包不得立即判定离线**
+- Peer 从 OFFLINE 恢复：收到任意有效包即刻转回 ONLINE
+- **`peerState` 忙线通告**：本机存在任何活动语音会话时置 BUSY；状态变化时**立即额外广播一次**，不等下一周期
+- 与 Discovery 分离，不混写
+- 不得每次心跳重新创建网络对象
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 两台设备可自动判断对方在线 / 离线。
+- 单次丢失心跳不导致离线。
+- 连续错过 3 个周期后判定离线。
+- 一端进入通话后，另一端在 1 秒内看到「通話中」。

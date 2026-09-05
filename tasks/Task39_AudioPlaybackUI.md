@@ -34,31 +34,21 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现 History Detail 与录音播放 UI。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- play / pause / resume / stop / 进度显示
+- 字幕五态显示（`NOT_REQUESTED` 不显示字幕区域；`FAILED` 显示失败提示 + 重新识别入口）
+- **播放按钮在任何字幕状态下都必须可用**
+- 文件缺失或 `audioPath` 为 null：播放按钮禁用并说明原因，其余信息照常显示，**不得 Crash**
+- 进入详情自动标记已读
+- 收藏 / 取消收藏
+- **播放不得停止通信服务，也不得中断正在进行的 PTT**（播放期间收到 PTT，语音优先）
+- 全部状态与错误文案本地化
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 真实设备上历史录音可靠播放。
+- 文件不存在时显示合理错误且不 Crash。
+- 播放期间收到 PTT 时行为符合设计。

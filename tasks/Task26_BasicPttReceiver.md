@@ -34,31 +34,24 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现接收端 PTT，**含最小 jitter buffer**。
+
+> 变更说明：最小 jitter buffer 并入本任务。若先实现「收到就播」再在后续任务插入缓冲，等于重写喂数据路径。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 校验 TargetDeviceId，**不是本机则立即丢弃**
+- 接受合法 VOICE_START → 回 `VOICE_ACCEPT` → 进入 RECEIVING
+- **最小 jitter buffer**：起播门限 3 帧（60 ms），目标深度 3 帧，最大 10 帧（200 ms），超出丢弃最旧帧
+- 按 sequence 排序，丢帧插入静音帧
+- 收到 VOICE_END → 冲刷缓冲 → 收尾 → ENDING → IDLE
+- **自动接收，不需要用户确认**
+- 进入 / 离开会话时驱动 `peerState` 并立即广播心跳
+- Activity 不存在时同样工作（挂在 Task15 的 Service 上）
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- B 自动听到 A，无需任何操作。
+- C 不是目标时收不到声音。
+- App 在后台、熄屏、锁屏时仍能接收并播放。
+- 起播延迟符合 60 ms 门限设计。

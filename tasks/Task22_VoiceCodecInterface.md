@@ -34,31 +34,25 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+建立可替换的音频 Codec 接口。
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
+```kotlin
+interface VoiceCodec {
+    val frameSizeSamples: Int
+    val maxEncodedBytes: Int
+    fun encode(pcm: ShortArray, out: ByteArray): Int
+    fun decode(encoded: ByteArray, len: Int, out: ShortArray): Int
+    fun release()
+}
 ```
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 领域层与会话层不得依赖任何具体 codec 的 API。
+- 接口设计为**调用方提供输出缓冲**，避免每帧分配。
+- 提供 fake 实现（直通 PCM）供上层测试。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 可用 fake 实现完成上层单元测试。
+- 接口中无 Opus 专有类型。

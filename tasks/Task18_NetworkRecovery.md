@@ -34,31 +34,35 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+处理 WiFi 断开、重连与 IP 变化。
+
+> 顺序说明：本任务原为 Task16。socket 在 Task14 才建立、属主在 Task15 才确定，因此恢复逻辑必须排在两者之后，否则会写两遍。
 
 ## Requirements
 
+监听网络变化（`ConnectivityManager` 回调，不轮询），处理：
+
 ```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
+CONNECTED → DISCONNECTED → RECOVERING → CONNECTED
 ```
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+恢复流程：
 
-要求：
+1. 终止活动语音会话，标记 `INTERRUPTED`
+2. 关闭并重建两个 socket（控制端口固定，语音端口重新分配）
+3. 清理失效 endpoint，Peer 全部置 OFFLINE
+4. 重新 Discovery（announce ×3），通告新的 voicePort
+5. 重启 Heartbeat
+6. 更新 Peer endpoint
 
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+规则：
+
+- **Device ID 永不因 IP 变化而改变。**
+- 不尝试跨网络状态强行恢复实时语音会话。
+- 恢复过程不得 Crash，不得泄漏 socket。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- WiFi 关闭 → 打开后自动重新发现，无需重启 App。
+- IP 变化后 Device ID 不变，Peer endpoint 正确更新。
+- 反复断开 / 恢复多次后无 socket 泄漏。

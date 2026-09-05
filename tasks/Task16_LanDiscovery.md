@@ -34,31 +34,31 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现局域网自动发现。
+
+## Required Reading
+
+- **`docs/ADR/ADR-001-Discovery-Strategy.md`**
+- `docs/03_Protocol.md §9`、`§10`
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
+**纯 UDP 广播发现，不实现 NSD / mDNS。**
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+- 上线、网络恢复、Active User 变更时广播 DISCOVERY，在 `0 / 300 / 900 ms` 各发一次
+- 收到 DISCOVERY 立即单播回 DISCOVERY_RESPONSE
+- 广播地址：优先用接口子网定向广播（由 IP 与掩码计算），失败回退 `255.255.255.255`
+- 过滤 SenderDeviceId == 本机的回环包
+- Payload 携带 `peerState` / `voicePort` / `userName`
+- 同一 deviceId 的 IP 变化只更新 endpoint，不创建新 Peer
+- 挂载在 Task15 的 Service 上，使用 Task14 的 controlSocket
+- 接口：`PeerDiscovery`，实现可替换
 
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+不实现语音传输。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 两台真实设备在同一 WiFi 下可互相发现。
+- 第三台设备加入后自动出现。
+- 重复 DISCOVERY 不产生重复 Peer。
+- 改名后对端在下一个广播内看到新名称。

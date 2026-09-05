@@ -6,17 +6,18 @@ Before implementing this task:
 
 1. Read `.claude/CLAUDE.md`.
 2. Read the relevant documents under `docs/`.
-3. Read this task completely.
-4. Inspect the current repository and existing implementation.
-5. Do not assume the repository is empty or matches the planned structure.
+3. **Read the ADRs listed under Required Reading below.** Where an ADR and a `docs/` file disagree, the ADR wins.
+4. Read this task completely.
+5. Inspect the current repository and existing implementation.
+6. Do not assume the repository is empty or matches the planned structure.
 
 Scope rule:
 
 - Implement ONLY this task.
 - Do not silently implement later tasks.
 - Do not redesign unrelated modules.
-- Do not modify protocol, database schema, public interfaces, or module boundaries unless this task explicitly requires it.
-- If an architectural change is necessary, explain why before making it and create/update an ADR when appropriate.
+- Do not modify protocol format, database schema, public interfaces, or module boundaries unless this task explicitly requires it.
+- If an architectural change is necessary, explain why before making it, and create a NEW ADR (never edit an accepted one silently).
 
 After implementation:
 
@@ -33,34 +34,25 @@ After implementation:
 
 ## Goal
 
-建立并确认项目开发基线，不实现 Android 业务代码。
+建立并确认项目开发基线。不实现任何 Android 业务代码。
 
 ## Required Reading
 
-- `docs/00_MasterPrompt.md`
-- `docs/01_PRD.md`
-- `docs/02_Architecture.md`
-- `docs/03_Protocol.md`
-- `docs/04_UI_UX.md`
-- `docs/05_DataModel.md`
-- `docs/06_DevelopmentPlan.md`
-- `docs/07_TestPlan.md`
-- `docs/08_ReleaseChecklist.md`
+- `docs/00_MasterPrompt.md` ~ `docs/08_ReleaseChecklist.md`
+- `docs/ADR/README.md` 与全部 6 份 ADR
 
 ## Work
 
-- Inspect Git repository.
-- Inspect current files and branches.
-- Verify `.claude/CLAUDE.md`.
-- Verify documentation structure.
-- Verify `.gitignore`.
-- Verify README.
-- Do not create business implementation.
+- 检查 Git 仓库、分支、工作区状态。
+- 确认 `.claude/CLAUDE.md` 与 `docs/` 结构完整。
+- 确认 `.gitignore` 存在且覆盖 Gradle / Android / NDK / IDE / 模型文件。
+- 确认 `docs/ADR/` 存在且 6 份 ADR 齐全。
+- 确认 README 已提交。
+- 提交当前所有未提交的文档改动。
+- 不创建任何业务实现。
 
 ## Acceptance Criteria
 
-- Repository baseline is understood.
-- Existing documentation is preserved.
-- No unrelated files are changed.
-- A concise repository status report is produced.
-
+- 工作区干净，无未提交文件。
+- 文档与 ADR 结构完整。
+- 产出一份简明的仓库状态报告。

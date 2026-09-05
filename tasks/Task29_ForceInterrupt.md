@@ -34,31 +34,35 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现可选的强制插入。
+
+## Required Reading
+
+- `docs/03_Protocol.md §33`、`§34`
+- `docs/ADR/ADR-003-Wire-Format.md §6`、`§7`
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
+**这是接收方开关**：`allow_interrupt`（Boolean，默认 false），含义为「允许其他设备打断我正在进行的通话」。
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+呼叫方**没有**任何强插开关，也无法感知对方策略。
 
-要求：
+流程：
 
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+1. B 忙线且 `allow_interrupt = true` 时，**原子地**把会话所有权从 S1 转移到 S2
+2. B → A 发送 `SESSION_TERMINATE(reason = 0x01)`
+3. B → C 发送 `VOICE_ACCEPT(S2)`
+4. A 收到后结束会话，已采集音频保存为 `INTERRUPTED`
+5. 属于 S1 的后续包一律丢弃
+
+竞态：
+
+- 所有权转移必须是单一原子操作
+- 并发请求中只有一个被接受，其余返回 BUSY
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 开启后 C 可以打断 A → B。
+- A 收到终止通知，其记录状态为 `INTERRUPTED`。
+- 并发强插测试：只有一个会话被接受，绝不出现两人同时播放。
+- 默认关闭时行为与 Task28 完全一致。

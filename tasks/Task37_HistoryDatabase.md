@@ -34,31 +34,34 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现 Room 通信记录。
+
+## Required Reading
+
+- **`docs/05_DataModel.md §10`（完整字段表）、`§23`、`§26`、`§27`**
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
+按 `05_DataModel §10` 实现 `CommunicationRecord` 的**全部字段**，注意：
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+- `transcriptStatus` 为**五态**，含 `NOT_REQUESTED`（默认值）
+- `status` 为**三态**：`COMPLETED` / `INTERRUPTED` / `FAILED`，**不引入 TIMEOUT**
+- `audioPath` 与 `audioFormat` 可空（保存失败时为 null）
+- `remoteDeviceId` 是有意的冗余列，写入时一次性计算
 
-要求：
+索引：`timestamp DESC`、`remoteDeviceId`、`remoteUserName`、`sessionId`（唯一）、`isRead`、`isFavorite`、`transcriptStatus`、`status`
 
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+其它：
+
+- 数据库名 `saikai_ptt.db`，版本从 1 开始
+- **禁止生产版本使用 destructive migration**
+- 导出 schema 到版本控制
+- 记录创建使用 transaction
+- **History 故障不得影响 Discovery / Heartbeat / Voice**（`05_DataModel §48`）
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 完成一次 PTT 后可以保存有效记录。
+- 字段与 `05_DataModel §10` 完全一致。
+- Room 异常时核心通信不受影响。
+- 索引已建立并有查询测试。

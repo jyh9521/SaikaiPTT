@@ -34,31 +34,28 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现 LocalUser 数据与仓储逻辑，不做完整 UI。
 
 ## Requirements
 
+模型：
+
 ```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
+LocalUser(id: UUID, displayName: String, createdAt: Long, updatedAt: Long)
 ```
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+支持：create / rename / delete / list / activeUser / switchActiveUser
 
-要求：
+规则：
 
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- `id` 在 `displayName` 修改后保持不变。
+- 不能删除最后一个用户。
+- 不能直接删除当前 Active User，必须先切换。
+- `active_user_id` 指向不存在的用户时进行数据修复，不得 Crash（`05_DataModel §6`）。
+- `displayName` 校验：非空、去首尾空白、不允许全空白、**≤ 24 个码位且 ≤ 64 字节 UTF-8**（`03_Protocol §5.1`）。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 数据在重启后保持。
+- Active User 无效时能安全自愈。
+- 全部业务规则可在无 UI 情况下单元测试。

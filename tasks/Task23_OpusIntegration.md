@@ -34,31 +34,36 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+集成 Opus 编解码。
+
+## Required Reading
+
+- **`docs/ADR/ADR-004-Audio-Params.md`**
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
+参数（Config 中已定义）：
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+- `OPUS_APPLICATION_VOIP`，16 kHz 单声道，20 ms 帧
+- 20 kbps CBR，complexity 3，inband FEC 开启，DTX 关闭
 
-要求：
+选型前必须核实并记录：
 
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 是否提供 **16 KB page size 对齐**的 `.so`（Android 15+ 要求）
+- ABI 覆盖 `arm64-v8a` + `armeabi-v7a`
+- Android 11 兼容性
+- 维护状态与许可证
+- APK 体积与内存开销
+
+**结论必须写入新的 ADR**（ADR-007），包含所选库、版本、编译方式与验证结果。
+
+若无法满足 Android 11 或 16 KB 对齐要求，回退方案为 `MediaCodec` AAC-LC，**并同步升 ProtocolVersion 至 2**；该回退同样需要 ADR，不得静默切换。
+
+实现要求：生命周期安全，最小化分配。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- PCM → Opus → PCM 往返测试通过。
+- 编码输出长度稳定小于 400 字节。
+- `.so` 的 16 KB 对齐已验证并记录。
+- ADR-007 已创建。

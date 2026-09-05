@@ -34,31 +34,29 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+建立 `SettingsRepository`，作为**所有本地设置的唯一入口**。
+
+> 顺序说明：本任务原为 Task10。Device Identity 与 LocalUser 都依赖 DataStore，因此必须先于它们完成，否则后两者会各自实现一遍持久化，Task10 变成重构。
+
+## Required Reading
+
+- `docs/05_DataModel.md §3`（完整 key 清单与默认值）
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
+持久化 `05_DataModel §3` 中列出的全部 key：
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
+`device_id`、`local_users`、`active_user_id`、`app_language`、`allow_interrupt`、`history_retention`、`asr_enabled`、`asr_model_ready`、`overlay_enabled`、`first_launch_completed`、`permission_guidance_shown`
 
 要求：
 
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 使用类型化模型，不散落字符串 key。
+- 每个 key 有明确默认值。
+- 缺失 / 损坏值必须安全降级到默认值，不得 Crash（`05_DataModel §41`）。
+- 以 Flow 暴露读取。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 所有设置在进程重启后保持。
+- 损坏数据不导致 Crash。
+- 单元测试覆盖默认值与损坏值恢复。

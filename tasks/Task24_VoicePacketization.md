@@ -34,31 +34,23 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现 VOICE_START / VOICE_ACCEPT / VOICE_DATA / VOICE_END 的打包与解析。
+
+## Required Reading
+
+- `docs/ADR/ADR-003-Wire-Format.md §4`、`§5`
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
-
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+- 按 ADR-003 的 Payload 布局实现各类型
+- Sequence：VOICE_START = 0，VOICE_DATA 从 1 递增，**VOICE_END = 最后一帧 + 1**
+- VOICE_END payload 携带 `finalDataSequence` 与 `frameCount`
+- VOICE_DATA payload ≤ 400 字节，整包 ≤ 472 字节，**设计上不产生 IP 分片**
+- 复用缓冲区，禁止每帧分配
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 连续音频帧可打包并正确还原。
+- 超限 payload 被拒绝。
+- Sequence 规则有测试覆盖，含 VOICE_END 的取值。
+- 有测试断言最大包长小于 MTU。

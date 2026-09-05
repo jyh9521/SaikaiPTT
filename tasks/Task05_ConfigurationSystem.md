@@ -6,17 +6,18 @@ Before implementing this task:
 
 1. Read `.claude/CLAUDE.md`.
 2. Read the relevant documents under `docs/`.
-3. Read this task completely.
-4. Inspect the current repository and existing implementation.
-5. Do not assume the repository is empty or matches the planned structure.
+3. **Read the ADRs listed under Required Reading below.** Where an ADR and a `docs/` file disagree, the ADR wins.
+4. Read this task completely.
+5. Inspect the current repository and existing implementation.
+6. Do not assume the repository is empty or matches the planned structure.
 
 Scope rule:
 
 - Implement ONLY this task.
 - Do not silently implement later tasks.
 - Do not redesign unrelated modules.
-- Do not modify protocol, database schema, public interfaces, or module boundaries unless this task explicitly requires it.
-- If an architectural change is necessary, explain why before making it and create/update an ADR when appropriate.
+- Do not modify protocol format, database schema, public interfaces, or module boundaries unless this task explicitly requires it.
+- If an architectural change is necessary, explain why before making it, and create a NEW ADR (never edit an accepted one silently).
 
 After implementation:
 
@@ -33,28 +34,34 @@ After implementation:
 
 ## Goal
 
-实现统一配置中心。
+实现统一配置中心，消除 magic number。
+
+## Required Reading
+
+- `docs/ADR/ADR-002-Transport-And-Ports.md`
+- `docs/ADR/ADR-003-Wire-Format.md`
+- `docs/ADR/ADR-004-Audio-Params.md`
 
 ## Requirements
 
-Centralize:
+集中定义（不可变、带类型）：
 
-- protocol version
-- network ports
-- heartbeat interval
-- peer timeout
-- discovery timing
-- audio parameters
-- retry limits
-- logging behavior
-
-No magic numbers in newly created core code.
-
-Use immutable typed configuration where practical.
+| 组 | 值 |
+|---|---|
+| 协议 | `protocolVersion = 1`，magic，头部长度 72，payload 上限 1024，VOICE_DATA 上限 400，userName 上限 64 字节 |
+| 端口 | `controlPort = 45820`（固定，占用时 +1 最多 4 次），`voicePort = 45821`（浮动） |
+| 发现 | announce 重发时序 `0 / 300 / 900 ms` |
+| 心跳 | `heartbeatIntervalMs = 5000`，`peerTimeoutMs = 16000`，`presenceEvaluationIntervalMs = 2000` |
+| 会话 | `voiceStartRetryMs = 150`，`voiceStartMaxRetries = 2`，`voiceStartTimeoutMs = 500`，`preRollBufferMs = 500`，`sessionIdleTimeoutMs = 3000`，`sessionMaxDurationMs = 300000` |
+| 音频 | `sampleRate = 16000`，`channels = 1`，`frameMs = 20`，Opus bitrate 20000 / complexity 3 / FEC on / DTX off |
+| Jitter buffer | 起播 3 帧，目标 3 帧，最大 10 帧 |
+| 限流 | 控制包 50/s，非法包 20/s，Peer 表上限 64 |
+| 历史 | 默认保留 7 天，ASR 重试上限 3 |
+| 日志 | 各 category 的开关与 Release 默认值 |
 
 ## Acceptance Criteria
 
-- Configuration can be injected/tested.
-- Existing build remains green.
-- Values are not duplicated across modules.
-
+- 配置可注入、可在测试中替换。
+- 值不在多个模块中重复定义。
+- 新建的 core 代码中无 magic number。
+- 构建保持绿色。

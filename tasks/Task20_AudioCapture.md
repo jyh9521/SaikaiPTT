@@ -34,31 +34,27 @@ After implementation:
 
 ## Goal
 
-建立 Peer 领域模型与状态机。
+实现 AudioRecord 采集抽象与基础实现。
+
+## Required Reading
+
+- `docs/ADR/ADR-004-Audio-Params.md §1`、`§2`
 
 ## Requirements
 
-```text
-Peer(
-  deviceId, userName,
-  endpoint(ip, voicePort),
-  protocolVersion,
-  state, lastSeen
-)
-```
+- 16 kHz / 单声道 / PCM 16-bit / 20 ms 帧（320 samples）
+- `AudioSource` 优先 `VOICE_COMMUNICATION`，初始化失败回退 `MIC`（两者在 Config 中可切换）
+- buffer = `max(minBufferSize, 4 × frameBytes)`
+- 专用线程，优先级 `THREAD_PRIORITY_URGENT_AUDIO`
+- 缓冲区预分配复用，禁止每帧分配
+- 麦克风权限感知；初始化或 `startRecording` 失败返回 `MICROPHONE_UNAVAILABLE`
+- 生命周期安全的初始化与释放，支持 cancellation
+- 无 UI 依赖
 
-状态：`DISCOVERED` / `ONLINE` / `OFFLINE` / `BUSY` / `COMMUNICATING`
-
-要求：
-
-- 使用显式状态模型，**禁止用多个独立 Boolean 组合表达状态**。
-- `BUSY` 由对端心跳的 `peerState` 字段驱动（`03_Protocol §12.2`）。
-- `COMMUNICATING` 表示「正在与本机通话」，由本机会话状态驱动。
-- 同一 `deviceId` 的 IP 变化只更新 endpoint，不创建新 Peer。
-- Peer 表容量上限 64。
+不接 UDP。
 
 ## Acceptance Criteria
 
-- 状态转换确定、可单元测试。
-- endpoint 变化不产生重复 Peer。
-- 非法转换有明确定义（拒绝或忽略），不抛异常。
+- 真实设备可稳定采集音频。
+- 正常与失败初始化后资源都能正确释放。
+- 反复 start / stop 多次无泄漏。
