@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-本文档定义 SaikaiPTT 发布 Release Candidate 和正式版本前必须完成的检查项。
+本文档定义 SaikaiPTT 在 Release Candidate 和正式版本发布之前必须完成的检查项。
 
 发布目标：
 
@@ -33,28 +33,26 @@ Release 前必须优先确认：
 
 Release 前确认：
 
-- versionName
-- versionCode
-- applicationId
-- minSdk
-- targetSdk
-- compileSdk
+- versionName / versionCode
+- applicationId / namespace = `com.saikai.ptt`
+- Application display name = `西海PTT`
+- minSdk = 30
+- **compileSdk / targetSdk 为 Version Catalog 中显式钉死的具体版本**（不得是「开发机上最新的」）
 - release signing configuration
-- package name
+- dependency versions
 
-Application namespace：
+## 3.1 前台服务声明复核
 
-```text
-com.saikai.ptt
-```
+- `android:foregroundServiceType="connectedDevice|microphone"` 已声明
+- `FOREGROUND_SERVICE_CONNECTED_DEVICE` 与 `FOREGROUND_SERVICE_MICROPHONE` 权限已申请
+- 运行时类型切换正确：常驻 `connectedDevice`，发送期间加入 `microphone`
+- `BOOT_COMPLETED` 只以 `connectedDevice` 类型启动
 
-Display name：
+## 3.2 权限清单复核
 
-```text
-西海PTT
-```
+确认已声明且**没有多余权限**：
 
----
+`INTERNET`、`ACCESS_NETWORK_STATE`、`ACCESS_WIFI_STATE`、`CHANGE_WIFI_MULTICAST_STATE`、`RECORD_AUDIO`、`FOREGROUND_SERVICE`、`FOREGROUND_SERVICE_CONNECTED_DEVICE`、`FOREGROUND_SERVICE_MICROPHONE`、`POST_NOTIFICATIONS`、`SYSTEM_ALERT_WINDOW`、`RECEIVE_BOOT_COMPLETED`、`WAKE_LOCK`
 
 # 4. Build Validation
 
@@ -69,10 +67,11 @@ Release build
 
 - Kotlin compilation
 - resources
-- manifest
-- Gradle dependencies
+- AndroidManifest
+- Gradle configuration
+- dependencies
 - packaging
-- signing
+- signing configuration
 
 Release build：
 
@@ -81,6 +80,7 @@ Release build：
 - 本地绝对路径
 - 开发机文件
 - Debug-only dependency
+- 测试服务
 - 未提交资源
 
 ---
@@ -100,28 +100,48 @@ Release 前执行：
 
 Warnings：
 
-需要确认是否可以接受。
+必须评估并记录是否接受。
 
 ---
 
-# 6. Dependency Review
+# 6. Dependency and Native Library Review
+
+## 6.1 依赖
 
 检查所有 dependencies：
 
 - 是否仍然需要
 - 是否兼容 Android 11+
-- 是否有明显安全问题
-- 是否增加不必要 APK 体积
+- 是否存在已知严重问题
+- 是否增加不必要的 APK 体积
 - 是否增加明显内存负担
 - 是否存在更轻量替代方案
 
-删除：
+删除未使用依赖。
 
-未使用依赖。
+## 6.2 原生库（阻塞项）
 
----
+本项目包含 Opus（ADR-007）与可选的 Vosk（ADR-008）原生库。
 
-# 7. Network Functionality
+必须验证：
+
+- [ ] **所有 `.so` 为 16 KB page size 对齐**（Android 15+ 要求）
+- [ ] ABI 清单符合预期（`arm64-v8a` + `armeabi-v7a`），无意外的多余 ABI
+- [ ] 许可证与再分发条款已确认并记录
+- [ ] 在 Android 11 与 Android 15/16 真机上均已实测加载成功
+
+任何一项不通过：**阻塞发布**。
+
+## 6.3 体积
+
+记录并评估：
+
+- APK / AAB 体积（分 ABI）
+- 与上一版本的体积差异
+
+ASR 模型不打进包内（ADR-006），若发现包内出现模型文件，视为打包配置错误。
+
+# 7. Network Validation
 
 验证：
 
@@ -135,13 +155,9 @@ Warnings：
 
 ## Heartbeat
 
-在线状态：
+在线状态稳定。
 
-稳定。
-
-离线：
-
-正确检测。
+离线状态可以正确检测。
 
 ## Endpoint
 
@@ -153,11 +169,11 @@ Peer endpoint 正确更新。
 
 ---
 
-# 8. PTT Core
+# 8. PTT Core Validation
 
 验证：
 
-- Target selection
+- target selection
 - PTT press
 - PTT hold
 - PTT release
@@ -177,27 +193,23 @@ Peer endpoint 正确更新。
 
 # 9. PTT Latency
 
-测量：
+测量「发言开始」到「接收端实际播放」之间的端到端延迟。
 
-发言：
+方法：发送固定测试音，两端同时录音，比对波形起点，**至少 30 次**。
 
-到：
+## 判定标准
 
-接收播放：
+| 指标 | 目标 | 结果 |
+|---|---|---|
+| P50 | ≤ 250 ms | |
+| P95 | ≤ 400 ms | |
+| 最大值 | 记录 | |
 
-的延迟。
+超出目标：必须调查并给出结论（优化，或修订目标并说明理由）。
 
-建议记录：
+原文档只要求记录数值而没有阈值——那样的检查项无法判定通过或失败，现给出明确目标。
 
-- P50
-- P95
-- Max
-
-任何明显异常：
-
-必须调查。
-
----
+测量条件：同一 AP；低端设备与旗舰设备各测；两个方向各测。
 
 # 10. PTT Audio Quality
 
@@ -247,27 +259,30 @@ A → B：
 
 # 12. Force Interrupt
 
-开启：
+**这是接收方开关**（`allow_interrupt`，默认关闭）。
 
-Force Interrupt。
+## 12.1 开启
 
-测试：
+**B 开启**「割り込みを許可」。
 
-A → B。
-
-C → B。
+测试：A → B 通话中，C → B。
 
 Expected：
 
-A Session：
+- A 收到 `SESSION_TERMINATE`，会话结束
+- A 的历史记录状态为 `INTERRUPTED`，录音可播放
+- C 收到 `VOICE_ACCEPT`，建立新 SessionId
+- 旧 Session 的后续包被丢弃
 
-结束。
+## 12.2 默认关闭
 
-C：
+B 未开启。
 
-建立新 Session。
+Expected：行为与 Busy Mode 完全一致，C 收到 BUSY。
 
----
+## 12.3 呼叫方无开关
+
+Expected：呼叫方 UI 中**不存在**任何强插开关；没有设备能单方面获得打断全网通话的能力。
 
 # 13. Force Interrupt Race
 
@@ -287,7 +302,7 @@ Expected：
 
 ---
 
-# 14. Background
+# 14. Background Validation
 
 测试：
 
@@ -311,9 +326,9 @@ Expected：
 
 服务停止。
 
-应用进入后台。
+App 进入后台。
 
-应用回到前台。
+App 回到前台。
 
 资源：
 
@@ -332,7 +347,7 @@ Expected：
 - low-frequency update
 - no notification spam
 
-Android 不同版本：
+不同 Android 版本：
 
 行为正确。
 
@@ -522,47 +537,48 @@ Crash。
 
 # 25. ASR
 
-验证：
+## 25.1 默认状态
 
-默认：
+Expected：Disabled。
 
-Disabled。
+## 25.2 模型下载
 
-开启：
-
-PTT 完成。
-
-状态：
-
-PENDING
-
-↓
-
-PROCESSING
-
-↓
-
-COMPLETED
-
-或：
-
-FAILED
-
----
-
-# 26. ASR Offline
-
-关闭互联网。
+首次开启 ASR。
 
 Expected：
 
-仍能：
+- 弹出确认框，说明需要约 50 MB 一次性下载
+- 显示进度，可取消
+- 完成后校验通过
+- 下载失败或取消：开关保持 OFF，**不影响任何其它功能**，无残留半个文件
 
-- 保存录音
-- 识别
-- 保存日语 transcript
+## 25.3 识别状态流转
 
----
+模型就绪后完成 PTT。
+
+Expected：`PENDING → PROCESSING → COMPLETED` 或 `FAILED`。
+
+ASR 关闭时完成的 PTT：`NOT_REQUESTED`。
+
+## 25.4 重试
+
+Expected：最多 3 次，之后 `FAILED`；用户可手动重新识别。
+
+# 26. ASR Offline
+
+**前提**：模型已下载完成。
+
+关闭互联网（移动数据关闭，AP 断开外网）。
+
+Expected：
+
+- 仍能保存录音
+- 仍能识别并保存日语 transcript
+- **无任何网络连接错误**
+
+同时确认核心通信全部正常：Discovery、Heartbeat、PTT、录音、回放、历史。
+
+这是产品定位的最终验证：除 ASR 模型的一次性下载外，任何功能都不依赖互联网。
 
 # 27. ASR Failure
 
@@ -939,24 +955,28 @@ Test button：
 
 # 44. Privacy Review
 
-确认：
-
-没有：
+确认没有：
 
 - cloud audio
 - cloud ASR
 - cloud history
 - unexpected telemetry
+- analytics backend
 
-录音：
+录音、字幕、历史：**只保存在应用私有目录**。
 
-只保存本地。
+## 44.1 唯一的联网路径
 
-Transcript：
+抓包确认：应用产生的网络流量只有两类：
 
-只保存本地。
+1. 局域网内的 SaikaiPTT 协议包（广播发现、心跳、语音）
+2. **ASR 模型的一次性下载**（仅在用户主动开启字幕功能时）
 
----
+除此之外的任何外部连接：**阻塞发布**。
+
+## 44.2 用户可见的说明
+
+README 与应用内说明必须如实写明这一例外，不得笼统宣称「完全离线」。
 
 # 45. File System Review
 
@@ -1175,21 +1195,29 @@ i18n。
 
 # 56. Final Release Gate
 
-以下任何一项失败：
+以下任何一项失败，**不得正式发布**：
 
-不得正式发布：
-
-- One-to-one PTT
-- Background Receive
+- One-to-one PTT（语音只到达目标设备）
+- VOICE_ACCEPT 握手与按下即录
+- Background Receive（含熄屏、锁屏）
 - Network Recovery
 - Busy
-- Recording
+- **Force Interrupt（接收方开关）**
+- **并发强插竞态：只有一个会话被接受**
+- Recording（双向）
 - Playback
-- Data Integrity
+- Data Integrity（含正在录制文件的保护、Room 失败隔离）
 - Android 11 compatibility
+- Android 14/15/16 前台服务行为
+- **原生库 16 KB page 对齐**
 - Low-end device stability
+- **i18n（五种语言，含缅甸语 / 孟加拉语字体）**
+- Release logging disabled，无 mock / fake / debug 面板
+- 无阻塞性 Crash / ANR
 
----
+修订说明：原 §56 的清单遗漏了 Force Interrupt 与 i18n，与 §55 的 RC 规则口径不一致，现已补齐。
+
+ASR 不在阻塞项内——它是默认关闭的可选功能。但 ASR 若已启用而导致 PTT 不稳定，则属于 PTT 阻塞项。
 
 # 57. Final Sign-Off
 

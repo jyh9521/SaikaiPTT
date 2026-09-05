@@ -87,20 +87,22 @@ Release 前：
 
 重点测试：
 
-- Device ID
-- LocalUser
-- DataStore
-- Protocol
-- Packet validation
-- Sequence
-- Session state machine
+- Device ID 生成与持久化
+- LocalUser CRUD、Active User 自愈、名称长度校验（码位 + 字节双重上限）
+- DataStore 默认值与**损坏值安全降级**
+- Protocol encode / decode
+- **协议头部逐字节布局断言**（固定字节数组比对，验证偏移与大端序）
+- Packet validation 的 12 步顺序
+- **Sequence 32-bit 回绕比较**
+- Session state machine（合法与非法转换）
+- **VOICE_ACCEPT 握手与超时重发**
+- **并发 VOICE_START 的会话所有权唯一性**
 - Busy logic
-- Force Interrupt
+- Force Interrupt（接收方策略）
+- Jitter buffer 排序、去重、丢帧、越界丢弃
 - History rules
-- Cleanup logic
-- ASR state transitions
-
----
+- Cleanup logic（含收藏保护、正在录制文件保护）
+- ASR state transitions（五态）
 
 # 6. Device Identity Tests
 
@@ -230,151 +232,100 @@ Expected：
 
 # 8. Internationalization Tests
 
-必须测试：
+必须测试：`ja` / `zh-CN` / `en` / `my` / `bn`
 
-- ja
-- zh-CN
-- en
-- my
-- bn
+检查页面：Home、PTT、Settings、History、Overlay、Notification、Errors、Empty State、Busy、权限引导
 
-检查：
+不得出现：missing translation、hard-coded English、hard-coded Chinese、截断、layout overflow
 
-- Home
-- PTT
-- Settings
-- History
-- Overlay
-- Notification
-- Errors
-- Empty State
-- Busy
-- Force Interrupt
-- Permissions
+## TC-I18N-001 语言切换机制
 
-不得出现：
+切换语言。
 
-- missing translation
-- hard-coded English
-- hard-coded Chinese
-- 截断
-- layout overflow
+Expected：立即生效，无需手动重启。
 
----
+## TC-I18N-002 切换后持久化
+
+切换语言后重启 App。
+
+Expected：仍为所选语言。
+
+## TC-I18N-003 应用外组件同步
+
+切换语言后，检查 **Foreground Service 通知** 与 **悬浮窗** 文本。
+
+Expected：同步切换（这两者不走 Activity 的 Configuration，必须从 DataStore 的 `app_language` 取值）。
+
+## TC-I18N-004 系统级语言设置（Android 13+）
+
+在系统设置 → 应用 → SaikaiPTT → 语言 中修改。
+
+Expected：应用内语言同步变化。
+
+## TC-I18N-005 字体渲染
+
+在**低端 Android 11 参考设备**上检查缅甸语与孟加拉语。
+
+Expected：无缺字、无豆腐块、无 Zawgyi 错乱、无换行异常。
+
+这是已知的高风险项，必须实测而非目视代码。
 
 # 9. Discovery Tests
 
-至少两台设备。
+发现机制为**纯 UDP 广播**（ADR-001），至少两台设备。
 
 ## TC-DISC-001
-
-同一 WiFi：
-
-A 启动。
-
-B 启动。
-
-Expected：
-
-互相发现。
-
----
+同一 WiFi，A 启动，B 启动。Expected：互相发现。
 
 ## TC-DISC-002
-
-第三台设备加入。
-
-Expected：
-
-自动出现。
-
----
+第三台设备加入。Expected：自动出现（收到其 DISCOVERY 后立即单播应答）。
 
 ## TC-DISC-003
-
-设备离线。
-
-Expected：
-
-经过 heartbeat timeout 后：
-
-变为 Offline。
-
----
+设备离线。Expected：经过 `peerTimeoutMs`（16 秒）后变为 Offline。
 
 ## TC-DISC-004
-
-设备重新上线。
-
-Expected：
-
-自动恢复 Online。
-
----
+设备重新上线。Expected：收到任意有效包即刻恢复 Online。
 
 ## TC-DISC-005
-
-IP 变化。
-
-Expected：
-
-原 Device ID 不变。
-
-Peer endpoint 更新。
-
----
+IP 变化。Expected：Device ID 不变，Peer endpoint 更新，不产生新 Peer。
 
 ## TC-DISC-006
+重复 Discovery。Expected：不产生重复 Peer。
 
-重复 Discovery。
+## TC-DISC-007 回环过滤
+Expected：设备不把自己的广播当作一个 Peer。
 
-Expected：
+## TC-DISC-008 改名传播
+A 切换 Active User。Expected：B 在下一次广播内看到新名称，Device ID 不变。
 
-不会产生重复 Peer。
+## TC-DISC-009 熄屏接收
+B 熄屏、锁屏。A 启动。Expected：B 仍能收到广播并发现 A（验证 `MulticastLock` 生效）。
 
----
+## TC-DISC-010 已知限制
+在开启 AP Isolation 的 AP 上测试。Expected：无法发现——此结果符合预期，须与 README 的已知限制一致，不视为缺陷。
 
-# 10. Heartbeat Tests
+# 10. Heartbeat and Presence Tests
 
 ## TC-HB-001
-
-正常 heartbeat。
-
-Expected：
-
-Peer 保持 Online。
-
----
+正常心跳。Expected：Peer 保持 Online。
 
 ## TC-HB-002
-
-连续 heartbeat 丢失。
-
-Expected：
-
-Peer 经过 timeout 后 Offline。
-
----
+连续错过 3 个周期。Expected：Peer 变为 Offline。
 
 ## TC-HB-003
-
-单次 heartbeat 丢失。
-
-Expected：
-
-不会立即 Offline。
-
----
+单次心跳丢失。Expected：**不会**立即 Offline。
 
 ## TC-HB-004
+网络恢复。Expected：心跳自动恢复。
 
-网络恢复。
+## TC-HB-005 忙线状态通告
+A 与 B 开始通话。Expected：C 在 **1 秒内**看到 B 显示「通話中」（依赖状态变化时的立即广播，而非等待 5 秒周期）。
 
-Expected：
+## TC-HB-006 忙线状态解除
+通话结束。Expected：C 在 1 秒内看到 B 恢复空闲。
 
-Heartbeat 自动恢复。
-
----
+## TC-HB-007 广播而非单播
+4 台设备同时在线，抓包统计。Expected：每台设备每周期只发 **1 个**心跳包，而不是 3 个。
 
 # 11. Protocol Tests
 
@@ -401,135 +352,74 @@ Expected：
 # 12. Sequence Tests
 
 ## TC-SEQ-001
-
-正常：
-
-1
-2
-3
-4
-
-Expected：
-
-顺序处理。
-
----
+正常 1 2 3 4。Expected：顺序处理。
 
 ## TC-SEQ-002
-
-乱序：
-
-1
-3
-2
-
-Expected：
-
-由 jitter buffer 处理。
-
----
+乱序 1 3 2。Expected：由 jitter buffer 重排后正确播放。
 
 ## TC-SEQ-003
-
-重复：
-
-1
-2
-2
-3
-
-Expected：
-
-重复 Packet 不重复播放。
-
----
+重复 1 2 2 3。Expected：重复包不重复播放。
 
 ## TC-SEQ-004
-
-丢包：
-
-1
-2
-4
-5
-
-Expected：
-
-继续播放。
-
-不得无限等待 3。
-
----
+丢包 1 2 4 5。Expected：继续播放，不无限等待 3。
 
 ## TC-SEQ-005
+Session mismatch。Expected：包被丢弃。
 
-Session mismatch。
+## TC-SEQ-006 Sender mismatch
+同一 SessionId 下发送方变化。Expected：拒绝，防止第三方注入语音。
 
-Expected：
+## TC-SEQ-007 回绕比较（单元测试）
+`0xFFFFFFFE → 0xFFFFFFFF → 0x00000000 → 0x00000001`
 
-Packet 被丢弃。
+Expected：`isNewer` 判定正确，播放顺序正确，不出现整段音频被误判为「过期」而丢弃。
 
----
+这是长时间运行才会触发的缺陷，必须用单元测试覆盖，不能只依赖真机测试。
+
+## TC-SEQ-008 VOICE_END 序号
+Expected：VOICE_END 的 sequence == 最后一个 VOICE_DATA + 1，且与 payload 中的 `finalDataSequence` 一致。
 
 # 13. PTT Sender Tests
 
 ## TC-PTT-S-001
-
-选择在线目标。
-
-按住：
-
-开始发送。
-
----
+选择在线目标，按住：开始发送。
 
 ## TC-PTT-S-002
-
-松开：
-
-发送结束。
-
----
+松开：发送结束，生成历史记录。
 
 ## TC-PTT-S-003
-
-没有 Active User。
-
-Expected：
-
-禁止发送。
-
----
+没有 Active User。Expected：禁止发送。
 
 ## TC-PTT-S-004
-
-没有 Target。
-
-Expected：
-
-禁止发送。
-
----
+没有 Target。Expected：禁止发送。
 
 ## TC-PTT-S-005
-
-Target Offline。
-
-Expected：
-
-禁止发送。
-
----
+Target Offline。Expected：禁止发送或提示对方不在线。
 
 ## TC-PTT-S-006
+Target Busy。Expected：收到 BUSY，不生成历史记录。
 
-Target Busy。
+## TC-PTT-S-007 握手
+Expected：`REQUESTING → TRANSMITTING` 由 `VOICE_ACCEPT` 触发，而不是超时后盲发。
 
-Expected：
+## TC-PTT-S-008 VOICE_START 重发
+人为丢弃第一个 VOICE_START。Expected：150ms 后重发，最多 2 次，仍无应答则 500ms 放弃。
 
-收到 BUSY。
+## TC-PTT-S-009 按下即录（首音节不丢失）
+按下按钮的**同时**立即说话（不等待任何提示）。
 
----
+Expected：接收端能听到完整的第一个音节。
+
+验证方式：发送固定测试音（如 1kHz 短促音），比对接收端波形起点。
+
+## TC-PTT-S-010 通话中切换目标
+正在 PTT 时尝试切换 Target。Expected：被拒绝，必须先结束当前会话。
+
+## TC-PTT-S-011 通话中切换用户名
+正在 PTT 时尝试切换 Active User。Expected：被拒绝并提示通话结束后再切换。
+
+## TC-PTT-S-012 会话中途改名
+会话进行中修改本地用户名。Expected：本次会话继续使用原名称，下一次 PTT 使用新名称。
 
 # 14. PTT Receiver Tests
 
@@ -611,35 +501,50 @@ TargetDeviceId != C
 
 # 17. Busy Tests
 
-A → B。
+`allow_interrupt = false`（默认）。
 
-B 正在接收。
-
-C → B。
+A → B 通话中，C → B。
 
 Expected：
 
-B 不打断 A。
+- B 不打断 A
+- C 收到 BUSY
+- **C 端不生成历史记录**
+- A 与 B 的会话完全不受影响
 
-C 收到 BUSY。
+## TC-BUSY-001 呼叫方不做本地拒绝
+让 C 的 Peer 列表显示 B 为空闲（利用心跳滞后），此时 C 呼叫正在通话的 B。
 
----
+Expected：C 实际发出 VOICE_START 并收到 BUSY，而不是在本地直接拒绝。
+
+## TC-BUSY-002 无应答
+目标设备断电。
+
+Expected：C 在 500ms 后提示无响应，不生成历史记录。
 
 # 18. Force Interrupt Tests
 
-开启 Force Interrupt。
+**Force Interrupt 是接收方开关。**
 
-A → B。
-
-C → B。
+## TC-FI-001
+**B 开启**「允许被打断」。A → B 通话中，C → B。
 
 Expected：
 
-A → B Session 结束。
+- A 收到 `SESSION_TERMINATE`
+- A 的会话结束，已采集音频保存，记录状态 `INTERRUPTED`
+- C 收到 `VOICE_ACCEPT`，建立新 Session（新 SessionId）
+- 属于旧 Session 的后续包被丢弃
 
-C → B Session 建立。
+## TC-FI-002 默认关闭
+B 未开启该设置。
 
----
+Expected：行为与 Busy Mode 完全一致，C 收到 BUSY。
+
+## TC-FI-003 呼叫方无开关
+检查 C 的全部 UI。
+
+Expected：呼叫方**没有**任何强插相关的开关或界面；C 无法单方面获得打断能力。
 
 # 19. Force Interrupt Race Tests
 
@@ -679,27 +584,42 @@ Peer 自动恢复。
 
 # 21. Background Tests
 
-测试：
+测试：App foreground / background / screen off / device locked / long idle
 
-- App foreground
-- App background
-- screen off
-- device locked
-- long idle
+## TC-BG-001 后台接收
+接收端后台运行，发送端发起 PTT。
 
-接收端：
+Expected：接收端收到并自动播放。
 
-后台运行。
+## TC-BG-002 熄屏接收
+接收端熄屏。
 
-发送端：
+Expected：仍能收到（验证 `MulticastLock` 与前台服务生效）。
 
-发送 PTT。
+## TC-BG-003 锁屏接收
+Expected：同上。
 
-Expected：
+## TC-BG-004 长时间空闲后接收
+后台空闲 30 分钟后发起 PTT。
 
-接收端能够收到。
+Expected：仍能收到（验证 Doze 下前台服务的网络豁免）。
 
----
+## TC-BG-005 发送要求界面可见
+App 在后台，尝试通过悬浮窗直接发起发送。
+
+Expected：先拉起 Activity，界面可见后才允许按 PTT。
+
+这是 Android 14+ 的平台规则（麦克风类型 FGS 不能从后台提升），**不是缺陷**。必须验证提示清晰、路径顺畅，用户感知上仍是「点一下就能回话」。
+
+## TC-BG-006 无悬浮窗权限的降级
+关闭悬浮窗权限，App 在后台接收。
+
+Expected：Foreground Service 通知内容更新为「受信中：<名前>」，通信结束后恢复常态，且每次会话最多更新 2 次。
+
+## TC-BG-007 开机自启
+设备重启后不打开应用。
+
+Expected：服务以 `connectedDevice` 类型启动，**可接收但不可发送**；打开应用后恢复完整能力。
 
 # 22. Foreground Service Tests
 
@@ -784,31 +704,37 @@ Expected：
 
 # 26. Audio Latency Tests
 
-至少测量：
+测量「发言开始」到「接收端实际出声」的端到端延迟。
 
-发言开始：
+## 测量方法
 
-到：
+发送端播放固定测试音（如 1 kHz 短脉冲），同时录制两端音频，比对波形起点。
 
-接收端听到：
+**至少测量 30 次**，记录 P50 / P95 / 最大值。不要只测最好的一次。
 
-的端到端延迟。
+## 判定标准
 
-目标：
+| 指标 | 目标 | 判定 |
+|---|---|---|
+| P50 | ≤ 250 ms | 超出需调查 |
+| P95 | ≤ 400 ms | 超出需调查 |
+| 最大值 | — | 记录，异常尖峰必须定位原因 |
 
-尽可能低。
+原文档只要求「尽可能低」并记录数值，没有阈值——那样的验收项无法判定通过或失败。现给出明确目标值。
 
-建议记录：
+## 测量条件
 
-P50
+- 同一 AP，无明显干扰
+- 分别在低端设备与旗舰设备上测量
+- 分别测量 低端→旗舰、旗舰→低端 两个方向
 
-P95
+## 延迟构成参考
 
-最大值。
+```text
+采集缓冲(20ms) + 编码 + 网络 + jitter buffer 起播(60ms) + 解码 + 播放缓冲
+```
 
-不要只测试最好的一次。
-
----
+若实测显著超标，优先检查 jitter buffer 深度与 AudioTrack buffer 大小。
 
 # 27. Audio Quality Tests
 
@@ -870,57 +796,119 @@ UI 应显示合理错误。
 
 # 30. History Tests
 
-验证：
+验证每条记录的字段（以 `05_DataModel §10` 为准）：
 
-- send record
-- receive record
-- timestamp
-- duration
-- remote username
-- Device ID
-- session ID
-- audio path
-- transcript state
-- read state
-- favorite state
+id / sessionId / senderDeviceId / receiverDeviceId / remoteDeviceId / localUserId / remoteUserName / direction / timestamp / durationMs / audioPath / audioFormat / transcript / transcriptStatus / isRead / isFavorite / status / createdAt / updatedAt
 
----
+## TC-HIST-001 双向记录
+一次 A → B 的 PTT。
 
-# 31. History Consistency
+Expected：A 生成 direction = SEND 的记录，B 生成 direction = RECEIVE 的记录，两端各自独立。
 
-场景：
+## TC-HIST-002 用户名快照
+通信后远程用户改名。
 
-录音成功。
+Expected：历史记录仍显示通信发生时的名称。
 
-Room 写入失败。
+## TC-HIST-003 请求失败不生成记录
+被 BUSY 拒绝、以及 500ms 无应答。
+
+Expected：**两种情况都不生成任何历史记录**。
+
+## TC-HIST-004 中断记录
+发送过程中对方设备断电 / WiFi 断开。
 
 Expected：
 
-不会产生“成功历史 + 不存在音频”的错误记录。
+- 立即结束通信
+- **已采集的有效部分被保存**
+- 记录状态为 `INTERRUPTED`
+- 录音可播放
+- 不 Crash
 
-同时：
+## TC-HIST-005 强插中断记录
+被强插打断的一方。Expected：记录状态 `INTERRUPTED`，录音可播放。
 
-后续 cleanup 可以处理 orphan file。
+## TC-HIST-006 会话超时
+收到 VOICE_START 后对端失联。Expected：`sessionIdleTimeoutMs` 后结束，记录 `INTERRUPTED`（**不引入 TIMEOUT 状态**）。
 
----
+## TC-HIST-007 默认字幕状态
+ASR 关闭时完成 PTT。Expected：`transcriptStatus = NOT_REQUESTED`，详情页不显示字幕区域。
+
+# 31. History and Storage Consistency
+
+## TC-CONS-001 Room 写入失败
+录音成功，人为让 Room insert 失败。
+
+Expected：
+
+- 不产生「成功历史 + 不存在音频」的错误记录
+- 音频文件被标记为 orphan candidate
+- 后续 cleanup 可以处理
+- 不 Crash
+
+## TC-CONS-002 录音保存失败
+人为制造磁盘写入失败。
+
+Expected：
+
+- **实时 PTT 继续进行不中断**
+- 记录 `status = FAILED`，`audioPath = null`
+- UI 显示存储错误
+- 不 Crash
+
+## TC-CONS-003 磁盘写满
+把存储填至接近写满，然后进行 PTT。
+
+Expected：同 TC-CONS-002。语音通信优先于录音。
+
+## TC-CONS-004 录音写盘不阻塞实时路径
+人为让文件 I/O 变慢（大量并发写入）。
+
+Expected：有界队列满后丢弃录音帧并记 WARN，**语音发送与播放的延迟不受影响**（对比 TC-26 的延迟数据）。
+
+## TC-CONS-005 正在录制的文件受保护
+PTT 进行中触发一次自动清理。
+
+Expected：`records/.tmp/` 下正在写入的文件**不被删除**，本次通信正常完成。
+
+## TC-CONS-006 正在播放的文件受保护
+播放某条历史录音时触发清理，且该记录已过期。
+
+Expected：播放不中断或有明确处理，不出现「文件被删导致播放崩溃」。
+
+## TC-CONS-007 History 故障隔离
+人为让 Room 完全不可用。
+
+Expected：Discovery、Heartbeat、Voice **全部继续正常工作**（`05_DataModel §48`）。
 
 # 32. Cleanup Tests
 
-测试：
+测试保留期：1 day / 3 days / 7 days / 30 days / forever
 
-1 day
-3 days
-7 days
-30 days
-forever
+验证：过期记录被删除，未过期保留。
 
-验证：
+## TC-CLEAN-001 音频同步删除
+Expected：数据库记录与对应音频文件**同时**被删除，不留孤立文件。
 
-过期记录删除。
+## TC-CLEAN-002 收藏保护
+`isFavorite = true` 的过期记录。Expected：**不被自动清理删除**。
 
-未过期保留。
+## TC-CLEAN-003 单个文件删除失败
+人为让某个音频文件删除失败。
 
----
+Expected：记录日志并**继续处理其余记录**，不中止整个清理任务；该记录进入待清理状态供下次重试。
+
+## TC-CLEAN-004 孤立文件扫描
+人为制造数据库无引用的音频文件。
+
+Expected：被识别并清理，但**不误删正在创建、正在播放、正在进行 PTT 涉及的文件**。
+
+## TC-CLEAN-005 手动删除单条
+Expected：二次确认后，记录与音频同时删除。
+
+## TC-CLEAN-006 批量删除
+Expected：明确确认；收藏记录默认保留；选择连同收藏删除时需要单独的二次确认。
 
 # 33. Favorite Protection
 
@@ -976,45 +964,54 @@ Expected：
 
 # 36. ASR Tests
 
-ASR 默认：
+ASR 默认 **Disabled**。
 
-Disabled。
-
-启用：
-
-PTT 完成后进入：
-
-PENDING。
-
-然后：
-
-PROCESSING。
-
-最终：
-
-COMPLETED / FAILED。
-
----
-
-# 37. ASR Offline Test
-
-测试期间：
-
-禁用互联网。
+## TC-ASR-001 首次开启与模型下载
+在设置中首次开启 ASR。
 
 Expected：
 
-仍然能够：
+- 弹出确认框，说明需要约 50 MB 下载
+- 显示下载进度，可取消
+- 下载完成后校验通过，`asr_model_ready = true`
 
-- 保存录音
-- 处理 ASR
+## TC-ASR-002 下载失败 / 取消
+中断网络或取消下载。
+
+Expected：开关保持 OFF，**PTT、录音、历史完全不受影响**，无残留的半个模型文件。
+
+## TC-ASR-003 状态流转
+模型就绪后完成一次 PTT。
+
+Expected：`PENDING → PROCESSING → COMPLETED`（或 `FAILED`）。
+
+## TC-ASR-004 关闭时的状态
+ASR 关闭时完成 PTT。Expected：`transcriptStatus = NOT_REQUESTED`。
+
+## TC-ASR-005 重试上限
+人为让识别失败。Expected：最多重试 3 次后置 `FAILED`，不无限重试。
+
+## TC-ASR-006 手动重新识别
+在 History Detail 点击重新识别。Expected：重新入队，状态回到 `PROCESSING`。
+
+# 37. ASR Offline Test
+
+**前提**：模型已下载完成（TC-ASR-001）。
+
+测试期间**完全禁用互联网**（关闭移动数据，AP 断开外网）。
+
+Expected：
+
+- 仍能保存录音
+- 仍能完成 ASR 处理
 - 生成日语 transcript
+- **不出现任何网络连接错误**
 
-不得出现：
+同时验证核心通信：
 
-网络连接错误。
+- Discovery、Heartbeat、PTT、录音、回放、历史**全部正常**
 
----
+这是产品定位的核心验证：除 ASR 模型的一次性下载外，任何功能都不依赖互联网。
 
 # 38. ASR Failure Tests
 
@@ -1265,19 +1262,36 @@ UI：
 
 测试：
 
-- rotation
-- background
-- foreground
-- process recreation
-- app restart
-- device reboot
-- permission changes
+- 屏幕旋转
+- 前后台切换
+- 进程重建
+- App 重启
+- 设备重启
+- 权限运行时变更
+
+## TC-LC-001 旋转
+PTT 进行中旋转屏幕。Expected：PTT 状态不丢失，网络服务不停止，当前用户不消失。
+
+## TC-LC-002 返回键
+从 PTT 页返回。Expected：只退出 UI，**不停止 Foreground Service**。
+
+## TC-LC-003 进程被杀
+用系统设置强制停止应用，然后重新打开。
 
 Expected：
 
-状态正确恢复。
+- DataStore / Room / 音频文件**未损坏**
+- Device ID、用户名、设置、历史全部恢复
+- 重新 Discovery
+- **不承诺**自动恢复后台通信（Android 12+ 禁止后台启动 FGS），此为预期行为
 
----
+## TC-LC-004 设备重启
+Expected：服务以可接收状态启动；Device ID 与用户名不变。
+
+## TC-LC-005 运行时撤销权限
+在系统设置中撤销麦克风权限后回到应用。
+
+Expected：不 Crash；发送被禁用并给出可操作提示；**接收仍然正常**。
 
 # 49. Negative Tests
 
@@ -1349,23 +1363,43 @@ Android 16
 
 ---
 
-# 52. UI Test Categories
+# 52. UI and Accessibility Tests
 
-测试：
+## UI 状态
 
-- button states
-- list states
-- loading
-- empty state
-- error state
-- busy
-- receiving
-- transmitting
-- history
-- search
-- settings
+测试：button states / list states / loading / empty state / error state / busy / receiving / transmitting / history / search / settings
 
----
+## TC-UI-001 自动跳转边界
+在**用户名编辑页**（有未保存输入）时收到 PTT。
+
+Expected：**不强制跳转**，顶部显示可点击状态条，语音照常播放，输入不丢失。
+
+在 Home 页收到 PTT。Expected：自动切换到通信界面。
+
+## TC-UI-002 忙线设备可点选
+Peer 列表中显示「通話中」的设备。
+
+Expected：仍可点选，PTT 按钮不被禁用（最终判定权在被叫方）。
+
+## TC-UI-003 主页重组
+持续接收心跳 5 分钟。
+
+Expected：心跳更新**不导致整页重组**（用重组计数验证）。
+
+## 无障碍
+
+## TC-A11Y-001 TalkBack
+开启 TalkBack 遍历 Home、PTT、History、Settings。
+
+Expected：所有交互元素有内容描述；PTT 按钮的 label 明确（如「Push To Talk，目标：山田」）。
+
+## TC-A11Y-002 非颜色唯一状态
+用灰度模式（或色觉模拟）查看设备列表与未读标记。
+
+Expected：在线 / 忙线 / 离线、已读 / 未读**均可分辨**（图标 + 文本）。
+
+## TC-A11Y-003 触控区域与文本
+Expected：触控目标不小于 48dp；开启系统大字体后无截断与布局破损。
 
 # 53. Release Build Tests
 
@@ -1429,35 +1463,35 @@ Release Candidate 前：
 
 # 56. Acceptance Metrics
 
-这些是目标而不是绝对硬编码的数字。
+以下为**可判定的目标值**，在 MTK P22 类参考设备上测量，全部按**单核占用百分比**计。
 
-## Idle
+| 指标 | 目标 | 测量条件 |
+|---|---|---|
+| 待机 CPU | < 1% of one core | 服务运行、熄屏、无通信，10 分钟均值 |
+| 发送 CPU | ≤ 15% of one core | 采集 + Opus 编码 + UDP 发送 + 录音写盘 |
+| 接收 CPU | ≤ 12% of one core | UDP 接收 + jitter buffer + 解码 + 播放 + 录音写盘 |
+| Java heap | < 32 MB | 待机 |
+| 总内存 PSS | < 130 MB | 待机，**不含 ASR 模型** |
+| 端到端延迟 P50 | ≤ 250 ms | 同一 AP |
+| 端到端延迟 P95 | ≤ 400 ms | 同一 AP |
+| 待机网络 | ≤ 1 广播包 / 5 秒 / 设备 | 心跳 |
+| 启动时间 | 记录并对比，无硬性上限 | 冷启动 |
 
-CPU：
+## 56.1 关于内存口径
 
-尽可能 <1%。
+原「约 30 MB」的表述容易诱导无效优化。含 Compose、Room、DataStore 与前台服务的应用，Android 11 上实际 PSS 通常在 60~120 MB。
 
-## PTT
+因此拆为两个可测量口径：**Java heap < 32 MB**（应用自身分配的有效约束）与**总 PSS < 130 MB**（异常增长的告警线）。
 
-CPU：
+## 56.2 关于 CPU 口径
 
-目标 <10%。
+必须统一为**单核百分比**。八核设备上的「整机百分比」与单核百分比相差 8 倍，口径不一致会让测试结论不可比。
 
-## Memory
+## 56.3 判定规则
 
-普通运行：
+未达标项必须定位原因，并给出明确结论：优化，或修订目标值并说明理由。
 
-尽量保持低内存。
-
-约 30 MB 是优化参考值，不包括：
-
-- Android Runtime
-- 大型第三方运行时
-- ASR 模型
-
-实际必须以真实设备 profiling 为准。
-
----
+不得为了达到数字而牺牲稳定性，也不得以「这是优化目标」为由跳过测量。
 
 # 57. End-to-End Test
 
@@ -1590,26 +1624,36 @@ CPU / memory / latency。
 
 Release Candidate 必须满足：
 
-- build success
+- build success（Debug + Release）
 - lint clean / accepted findings
-- tests pass
+- unit tests pass
+- **协议头部逐字节测试通过**
+- **sequence 回绕测试通过**
 - two-device PTT pass
-- background receive pass
+- **VOICE_ACCEPT 握手 pass**
+- **按下即录（首音节不丢失）pass**
+- background receive pass（含熄屏、锁屏、长时间空闲）
+- **无悬浮窗权限时的通知降级 pass**
 - reconnect pass
 - busy pass
-- force interrupt pass
-- recording pass
+- **force interrupt pass（接收方开关）**
+- **并发强插竞态 pass**
+- recording pass（双向）
 - playback pass
-- ASR pass
-- i18n pass
+- history / search / favorite / unread / delete / cleanup pass
+- **正在录制文件的保护 pass**
+- ASR pass（含模型下载与离线识别）
+- i18n pass（五种语言，含缅甸语 / 孟加拉语字体）
+- accessibility pass
 - low-end device pass
-- modern device pass
+- modern device pass（Android 13 / 14 / 15 / 16）
+- 长时间稳定性 pass（8~24 小时）
+- 性能指标已实测并对照 §56 判定
+- **原生库 16 KB page 对齐验证通过**
 - no blocking crash
 - no blocking ANR
 - release logging disabled
-- no test/mock code
-
----
+- no test/mock/fake code
 
 # 62. Test Priority Rule
 
