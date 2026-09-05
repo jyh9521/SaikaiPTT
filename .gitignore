@@ -1,0 +1,49 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+local.properties
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+captures/
+.externalNativeBuild/
+.cxx/
+lint-results*.html
+lint-results*.xml
+
+# Native / NDK
+obj/
+libs/*/*.so
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Kotlin
+.kotlin/
+
+# Test / coverage
+/reports/
+jacoco.exec
+
+# ASR models must never be committed (downloaded on demand, see ADR-006)
+/models/
+*.zip
+
+# Local secrets / signing
+keystore.properties
+*.jks
+*.keystore
