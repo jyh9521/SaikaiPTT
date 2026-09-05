@@ -994,29 +994,46 @@ Do not silently continue into unrelated tasks.
 
 # 44. Architecture Decision Records
 
-Important technical decisions should be recorded as ADR documents.
+Important technical decisions are recorded as ADR documents in:
 
-Recommended location:
-
+```text
 docs/ADR/
+```
 
-Examples:
+**Where an ADR and any `docs/` file disagree, the ADR wins** and the doc must
+be corrected in the same change.
 
-ADR-001-Discovery.md
-ADR-002-VoiceTransport.md
-ADR-003-AudioCodec.md
-ADR-004-SpeechRecognition.md
+## 44.1 Current ADRs
 
-Each ADR should document:
+| ADR | Subject | Status |
+|---|---|---|
+| `ADR-001-Discovery-Strategy.md` | Pure UDP broadcast discovery; no NSD/mDNS | Accepted |
+| `ADR-002-Transport-And-Ports.md` | Two sockets, two receive threads, port assignment | Accepted |
+| `ADR-003-Wire-Format.md` | 72-byte header, packet types, payloads, validation order | Accepted |
+| `ADR-004-Audio-Params.md` | Audio parameters, Opus settings, jitter buffer, AudioFocus | Accepted |
+| `ADR-005-Foreground-Service-And-Compatibility.md` | FGS types, Android 11–16 constraints, power locks | Accepted |
+| `ADR-006-ASR-Engine-And-Model-Delivery.md` | Offline Japanese ASR engine and model delivery | Accepted |
+
+Planned, to be written by the task that makes the decision:
+
+| ADR | Produced by |
+|---|---|
+| `ADR-007` | Opus library selection and 16 KB alignment verification (Task23) |
+| `ADR-008` | ASR engine and model review conclusion (Task41) |
+
+## 44.2 Rules
+
+An accepted ADR is never edited silently. To change a decision, write a new
+ADR and mark the old one `Superseded`.
+
+Each ADR documents:
 
 - context
 - problem
-- alternatives
+- alternatives considered
 - selected solution
 - rationale
 - consequences
-
----
 
 # 45. Documentation Structure
 
