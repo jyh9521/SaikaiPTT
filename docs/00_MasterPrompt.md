@@ -114,45 +114,53 @@ Required core functions:
 - voice reception
 - communication history
 - local playback
-- local speech recognition
+- local speech recognition (once its model is present)
 
 All core communication must remain functional when the device has no Internet connection.
 
 No cloud dependency may be introduced into the core architecture.
 
----
+## 5.1 The one networking exception
+
+The offline Japanese ASR model is **not bundled in the APK**. Enabling subtitles for the first time downloads roughly 50 MB once; recognition itself is then 100% local, forever.
+
+Precisely stated:
+
+> Discovery, presence, one-to-one PTT, recording, playback and history **never** require the Internet.
+> Enabling Japanese subtitles for the first time requires one model download.
+
+See `docs/ADR/ADR-006-ASR-Engine-And-Model-Delivery.md`.
 
 # 6. Target Android Versions
 
-Minimum supported Android version:
+Minimum supported Android version: Android 11 / API 30
 
-Android 11 / API 30
+Target / Compile SDK: pinned explicitly in the Version Catalog. Release builds must be reproducible, so "whatever SDK happens to be installed" is not acceptable.
 
-Target:
+Supported environment: Android 11 through current Android releases.
 
-Latest stable Android SDK available during development.
+The application must support both low-end legacy devices and modern flagships.
 
-Supported environment:
-
-Android 11 through current Android releases.
-
-The application must support both:
-
-- low-end legacy Android devices
-- modern flagship devices
-
-Reference low-end device:
-
-MediaTek P22-class hardware
-with approximately 4 GB RAM.
-
-Reference modern device class:
-
-Samsung Galaxy S26-class flagship hardware.
+Reference low-end device: MediaTek P22-class hardware, approximately 4 GB RAM.
+Reference modern device class: current Samsung Galaxy flagship hardware.
 
 Low-end compatibility is a major product requirement.
 
----
+## 6.1 Platform constraints that shape the product
+
+Full detail in `docs/ADR/ADR-005-Foreground-Service-And-Compatibility.md`.
+
+- Android 12+: a foreground service cannot be started from the background.
+- Android 13+: `POST_NOTIFICATIONS` is a runtime permission.
+- Android 14+: a foreground service must declare its type; `BOOT_COMPLETED` cannot start a microphone-type service.
+- Android 15+: native libraries must be 16 KB page-size aligned.
+
+The product-visible consequence:
+
+> **Receiving works in the background, with the screen off and the device locked.**
+> **Transmitting requires the app UI to be visible.**
+
+Tapping the overlay opens the app, so from the user's point of view replying is still one tap away.
 
 # 7. Performance Philosophy
 
@@ -243,27 +251,29 @@ The existing communication must not be interrupted.
 
 # 11. Force Interrupt Mode
 
-SaikaiPTT may provide an optional Force Interrupt mode.
+SaikaiPTT provides an optional Force Interrupt mode.
 
-Default:
+Default: disabled.
 
-disabled.
+## 11.1 It is a receiver-side switch
 
-When enabled:
+Setting: `allow_interrupt` (Boolean, default false).
 
-a new incoming PTT request is allowed to interrupt an existing PTT session.
+Meaning:
 
-This feature is useful for:
+> "Allow other devices to interrupt a call I am currently in."
 
-- factories
-- warehouses
-- security
-- property management
-- urgent operational communication
+The caller neither needs nor can know the target's policy: it always sends an ordinary request, and the callee replies with VOICE_ACCEPT or BUSY.
+
+Rejected alternative — a sender-side switch: any single device could then unilaterally interrupt every call on the network, with no way for the callee to refuse.
+
+## 11.2 Flow
+
+When the callee is busy and allows interruption, it atomically transfers session ownership, sends `SESSION_TERMINATE` to the previous sender, and `VOICE_ACCEPT` to the new one. The interrupted sender's recording is stored with status `INTERRUPTED`.
+
+Useful for factories, warehouses, security, property management and urgent operational communication.
 
 The feature must be explicit and user-configurable.
-
----
 
 # 12. Device Identity
 
@@ -315,26 +325,23 @@ When communication starts, the current user name should be transmitted as part o
 
 SaikaiPTT must automatically discover compatible peers on the same local WiFi network.
 
-The user should not have to manually enter:
+The user should not have to manually enter IP addresses, ports or hostnames.
 
-- IP addresses
-- ports
-- hostnames
+## 14.1 Mechanism
 
-Preferred discovery mechanisms:
+**v1 uses pure UDP broadcast discovery. NSD / mDNS is not implemented.**
 
-- Android NSD / mDNS
-- UDP broadcast if required
+See `docs/ADR/ADR-001-Discovery-Strategy.md`.
 
-Discovery must be separated from:
+Discovery shares its socket and payload structure with heartbeat, so idle traffic is one broadcast packet per device per 5 seconds.
 
-- heartbeat
-- voice transport
-- communication session management
+Known limitation: enterprise APs with AP Isolation or broadcast filtering prevent discovery. Documented in the README; v1 offers no manual-IP fallback.
+
+## 14.2 Separation
+
+Discovery must be separated from heartbeat, voice transport and session management.
 
 Discovery must not depend on the Internet.
-
----
 
 # 15. Presence and Heartbeat
 
@@ -465,50 +472,44 @@ History must remain useful even when speech recognition fails.
 
 # 21. Offline Japanese Speech Recognition
 
-SaikaiPTT may perform local speech recognition after a PTT session ends.
+SaikaiPTT performs local speech recognition after a PTT session ends.
 
 Requirements:
 
-- completely offline
+- recognition is completely offline
 - no cloud ASR
 - no audio upload
-- Japanese language support
+- Japanese language
 - transcription performed after the PTT segment ends
+- **disabled by default on every device**
 
-The speech recognition subsystem must not interfere with live voice communication.
+Recommended engine: Vosk or another suitable lightweight offline Japanese ASR.
 
-Voice communication has higher priority than transcription.
+The model is downloaded once when the user first enables the feature (see §5.1). Recognition afterwards is fully local.
 
-Recommended engine:
-
-Vosk or another suitable lightweight offline Japanese ASR implementation.
+The speech recognition subsystem must not interfere with live voice communication. Voice communication has higher priority than transcription.
 
 Speech recognition is not required to operate in real time.
-
----
 
 # 22. Transcript and History Integration
 
 After the recording is saved:
 
 1. communication record is created
-2. local transcription is scheduled
+2. local transcription is scheduled (only if ASR is enabled)
 3. transcription runs in the background
 4. transcript is stored locally
 5. history UI is updated
 
-Possible states:
+States (**five**, see `docs/05_DataModel.md §23`):
 
-- pending
-- processing
-- completed
-- failed
+- `NOT_REQUESTED` — ASR is off, this record does not participate. **This is the default**, since ASR is off by default
+- `PENDING`
+- `PROCESSING`
+- `COMPLETED`
+- `FAILED`
 
-Recognition failure must not invalidate the recording.
-
-The user must still be able to replay the audio.
-
----
+Recognition failure must not invalidate the recording. The user must still be able to replay the audio.
 
 # 23. History Search
 
@@ -653,37 +654,26 @@ Room should store metadata and local file references.
 
 # 30. Communication Protocol
 
-The network protocol must be versioned.
+The network protocol is versioned. Its normative definition is `docs/03_Protocol.md` together with `docs/ADR/ADR-002` and `ADR-003`.
 
-Messages should have a structured packet layout containing concepts such as:
+Shape: a fixed **72-byte big-endian header** plus a `0..1024` byte payload. Device IDs and Session IDs travel as 16-byte binary UUIDs.
 
-- protocol version
-- packet type
-- device ID
-- user name
-- timestamp
-- sequence number
-- payload
+Packet types implemented in v1:
 
-Initial packet types should include:
+```
+DISCOVERY / DISCOVERY_RESPONSE
+HEARTBEAT / PING / PONG
+VOICE_START / VOICE_ACCEPT / VOICE_DATA / VOICE_END
+BUSY / SESSION_TERMINATE
+```
 
-- DISCOVERY
-- HEARTBEAT
-- PING
-- PONG
-- VOICE_START
-- VOICE_DATA
-- VOICE_END
-- BUSY
-- FORCE_INTERRUPT
+Reserved and unused in v1: `FORCE_INTERRUPT`, `ERROR`, `GOODBYE`, `CAPABILITIES`.
 
-The protocol must be extensible.
+`VOICE_ACCEPT` closes the sender state machine (`REQUESTING → TRANSMITTING` needs a positive acknowledgement, not just the negative BUSY). `SESSION_TERMINATE` lets the callee tell an interrupted peer that its session ended.
 
-Future packet types should be addable without breaking the protocol architecture.
+The protocol must remain extensible: future packet types should be addable without breaking the architecture. Do not implement unrelated future features merely because the protocol could carry them.
 
-Do not implement unrelated future features merely because the protocol supports them.
-
----
+Any format change requires a new ADR and a ProtocolVersion bump.
 
 # 31. Security and Input Validation
 
@@ -1030,10 +1020,7 @@ Each ADR should document:
 
 # 45. Documentation Structure
 
-The project documentation should be divided by topic.
-
-Expected documents:
-
+```text
 docs/00_MasterPrompt.md
 docs/01_PRD.md
 docs/02_Architecture.md
@@ -1043,14 +1030,14 @@ docs/05_DataModel.md
 docs/06_DevelopmentPlan.md
 docs/07_TestPlan.md
 docs/08_ReleaseChecklist.md
+docs/ADR/                     <- normative technical decisions
+```
 
-Implementation tasks belong under:
+Implementation tasks belong under `tasks/`.
 
-tasks/
+Claude must consult the relevant documents **and the relevant ADRs** before implementing a task.
 
-Claude should consult the relevant documents before implementing a task.
-
----
+**Where an ADR and a `docs/` file disagree, the ADR wins** and the doc must be corrected in the same change.
 
 # 46. Development Priorities
 

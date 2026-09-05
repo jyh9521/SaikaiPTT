@@ -73,35 +73,34 @@ Do NOT introduce heavy frameworks when a lightweight Android platform solution i
 
 ## 4. Supported Android Versions
 
-Minimum SDK:
+Minimum SDK: Android 11 / API 30
 
-Android 11 / API 30
+Target / Compile SDK: pinned explicitly in the Version Catalog (see Task03). Do NOT use "whatever is latest on this machine" — Release builds must be reproducible.
 
-Target SDK:
+Supported range: Android 11 through current Android releases.
 
-Latest stable Android SDK available during implementation.
-
-Supported range:
-
-Android 11 through current Android releases.
-
-The application must remain usable on low-end Android devices.
-
-Important reference device class:
-
-MediaTek MTK P22 class device
-
-Typical reference environment:
-
-- Android 11
-- 4 GB RAM
-- low-end CPU
-
-The application must also support modern flagship devices, including current Samsung Galaxy flagship devices.
+Reference low-end device: MediaTek MTK P22 class, Android 11, 4 GB RAM.
+Reference modern device: current Samsung Galaxy flagship.
 
 Low-end compatibility is a first-class requirement.
 
----
+### 4.1 Android version compatibility red lines
+
+Check these before writing any platform-facing code. Full detail in `docs/ADR/ADR-005-Foreground-Service-And-Compatibility.md`.
+
+| API | Version | Constraint |
+|---|---|---|
+| 30 | 11 | minSdk. Scoped storage; recordings always go to app-private storage |
+| 31 | 12 | **Cannot start a foreground service from the background.** `PendingIntent` must specify `FLAG_IMMUTABLE` |
+| 33 | 13 | `POST_NOTIFICATIONS` is a runtime permission. Per-app language handled by the system (`AppCompatDelegate.setApplicationLocales` + `localeConfig`) |
+| 34 | 14 | **FGS must declare `foregroundServiceType` and hold the matching `FOREGROUND_SERVICE_*` permission.** `BOOT_COMPLETED` must not start a `microphone`/`camera` type FGS |
+| 35 | 15 | **Native libraries must be 16 KB page-size aligned.** `dataSync` FGS capped at 6h (not used here) |
+| 36 | 16 | Same constraints as 15; re-verify FGS and notification behaviour on a real device before release |
+
+Consequence for this product:
+
+> **Receiving PTT works in the background, on-screen-off and locked.**
+> **Transmitting requires the app UI to be visible** (microphone-type FGS cannot be promoted from the background on Android 14+).
 
 ## 5. Core Communication Model
 
@@ -155,37 +154,27 @@ Receiving a PTT request is automatic.
 
 ## 7. Busy and Force Interrupt Modes
 
-Default behavior:
+Default behavior: Busy mode.
 
-Busy mode.
+If the target device is already engaged in a PTT session, the new request is rejected and the caller receives a clear BUSY status.
 
-If the target device is already engaged in a PTT session:
+### 7.1 Force Interrupt is a RECEIVER-side switch
 
-the new request is rejected.
+Setting key: `allow_interrupt` (Boolean, default **false**).
 
-The caller should receive a clear busy status.
+Meaning:
 
-Optional mode:
+> "Allow other devices to interrupt a call I am currently in."
 
-Force Interrupt.
+The caller does not need — and cannot — know the target's policy. The caller always sends an ordinary request; the callee replies with VOICE_ACCEPT or BUSY.
 
-When enabled:
+Rejected alternative: a sender-side switch. Any single device could then unilaterally interrupt every call on the network, with no way for the callee to refuse.
 
-a new PTT request can interrupt the existing communication.
+Intended environments: warehouses, factories, security, property management, emergency communication.
 
-This mode is intended for environments such as:
+The callee is the sole arbiter of session ownership. Ownership transfer must be a single atomic operation.
 
-- warehouses
-- factories
-- security
-- property management
-- emergency communications
-
-Default:
-
-disabled.
-
----
+See `docs/03_Protocol.md §33`, `§34`.
 
 ## 8. Device Identity
 
@@ -256,23 +245,25 @@ even if "田中" does not exist in its local name list.
 
 The application must automatically discover peers on the local WiFi network.
 
-Users must NOT be required to manually enter:
+Users must NOT be required to manually enter IP addresses, ports, hostnames or device registration information.
 
-- IP addresses
-- ports
-- hostnames
-- device registration information
+### 10.1 Mechanism
 
-Preferred discovery mechanisms:
+**v1 uses pure UDP broadcast discovery. NSD / mDNS is NOT implemented.**
 
-- Android NSD / mDNS
-- UDP broadcast as fallback if necessary
+See `docs/ADR/ADR-001-Discovery-Strategy.md`.
 
-Discovery logic must be isolated from voice communication.
+Reasons: one code path across Android 11~16 (NsdManager's API differs before/after API 34), no vendor-ROM variance on low-end MediaTek devices, shared socket and payload with heartbeat, and immediate propagation of username changes.
+
+Known limitation: enterprise APs with AP Isolation or broadcast filtering will prevent discovery. This is documented in the README; v1 provides no manual-IP fallback.
+
+Receiving broadcasts requires holding a `WifiManager.MulticastLock` — see §13.
+
+### 10.2 Separation
+
+Discovery logic must remain isolated from voice communication.
 
 A discovery failure must not crash or block the audio subsystem.
-
----
 
 ## 11. Heartbeat and Presence
 
@@ -336,23 +327,39 @@ The application must not assume that an IP address is permanent.
 
 ## 13. Background Operation
 
-The application must support long-term background operation.
-
-Use Android Foreground Service where required.
-
-A persistent notification may be used to keep the communication service alive.
-
-The application should guide the user to grant required Android permissions and battery-related settings where applicable.
+The application must support long-term background operation using an Android Foreground Service with a persistent notification.
 
 Background operation must prioritize low CPU and low battery consumption.
 
 Do NOT create unnecessary polling loops.
-
-Do NOT use aggressive WakeLock usage.
-
 Do NOT perform unnecessary continuous network scans.
 
----
+### 13.1 Foreground service type
+
+```xml
+android:foregroundServiceType="connectedDevice|microphone"
+```
+
+- Idle / receiving: `startForeground()` with `connectedDevice` only.
+- While the user holds PTT: `startForeground()` again including `microphone`; revert on release.
+
+Receiving and playback need no microphone, so **background receive is unaffected** by the microphone restrictions.
+
+### 13.2 Power locks — the ONLY three permitted uses
+
+The earlier blanket "no WakeLock" rule was too strict: with the screen off, WiFi power save drops broadcast frames, so without a `MulticastLock` the app cannot receive heartbeats in the background and the core requirement fails.
+
+**Except for the three cases below, holding any power lock is forbidden.**
+
+| Lock | Held when | Why |
+|---|---|---|
+| `MulticastLock` | For as long as the service is READY | Required to receive broadcast heartbeats with the screen off |
+| `WifiLock(WIFI_MODE_FULL_LOW_LATENCY)` | Only during an active voice session | Reduces voice jitter |
+| `PARTIAL_WAKE_LOCK` (5-minute timeout) | Only during an active voice session | Keeps the audio thread alive with the screen off |
+
+Never hold a power lock for heartbeat, discovery, logging or UI refresh. Never hold one without a timeout.
+
+See `docs/ADR/ADR-005-Foreground-Service-And-Compatibility.md §6`.
 
 ## 14. Overlay / Floating Window
 
@@ -426,35 +433,23 @@ User-facing text includes:
 
 Communication history is a core feature.
 
-Each completed PTT communication should create a local history entry.
+Each **successfully established and completed** PTT session creates a local history entry on both the sending and the receiving device.
 
-At minimum store:
+A request that was rejected (BUSY) or timed out with no answer creates **no** record.
 
-- Record ID
-- Device ID
-- remote user name
-- direction
-- timestamp
-- duration
-- local audio file path
-- transcript
-- recognition status
-- read/unread state
-- favorite state
+The authoritative field list is `docs/05_DataModel.md §10`. Do not maintain a second copy of it anywhere else. It includes, among others:
 
-Direction:
+- record id, session id
+- sender / receiver device id, remote device id
+- local user id, remote user name snapshot
+- direction (SEND / RECEIVE)
+- timestamp, durationMs
+- audioPath, audioFormat
+- transcript, transcriptStatus (5 states, default NOT_REQUESTED)
+- isRead, isFavorite
+- status (COMPLETED / INTERRUPTED / FAILED)
 
-SEND
-
-or
-
-RECEIVE
-
-History must remain local.
-
-No cloud synchronization.
-
----
+History must remain local. No cloud synchronization.
 
 ## 17. Audio Recording
 
@@ -489,41 +484,36 @@ The database stores metadata and the local audio file path.
 
 ## 18. Offline Speech Recognition
 
-Offline speech-to-text is an optional feature but part of the planned product.
+Offline speech-to-text is an optional feature. Recognition itself is 100% local: no cloud ASR, no audio upload, no remote API.
 
-Speech recognition must be:
+Current language requirement: Japanese only.
 
-100% local.
+Recommended engine: Vosk or another suitable offline Japanese ASR.
 
-No cloud speech recognition.
+### 18.1 Default is OFF — for every device
 
-No audio upload.
+ASR is **disabled by default on all devices**, not only low-end ones. The user turns it on explicitly.
 
-No remote API dependency.
+### 18.2 Model delivery — the one networking exception
 
-Current language requirement:
+The recognition model is **not bundled in the APK**. The first time the user enables ASR, the app asks for confirmation and downloads roughly 50 MB. After that it works fully offline, forever.
 
-Japanese only.
+So the product's offline promise is stated precisely as:
 
-Recommended implementation:
+> Core functionality — discovery, presence, one-to-one PTT, recording, playback, history — **never** requires the Internet.
+> The single exception: enabling Japanese subtitles for the first time requires one download of the recognition model.
 
-Vosk or another suitable offline Japanese ASR engine.
+Download failure or cancellation leaves ASR off and affects nothing else.
 
-Speech recognition should run AFTER a PTT segment has finished.
+See `docs/ADR/ADR-006-ASR-Engine-And-Model-Delivery.md`.
 
-Do NOT make real-time transcription a core requirement.
+### 18.3 Priority
+
+Speech recognition runs AFTER a PTT segment has finished. Real-time transcription is not a requirement.
 
 Audio communication always has higher priority than speech recognition.
 
-If speech recognition fails:
-
-- the recording must remain playable
-- the history entry must remain valid
-- the PTT system must not fail
-
-Speech recognition should be disabled by default on low-end devices if necessary.
-
----
+If recognition fails: the recording stays playable, the history entry stays valid, and the PTT system must not fail.
 
 ## 19. History Search
 
@@ -598,43 +588,37 @@ Do NOT use a database for simple application preferences.
 
 ## 23. Communication Protocol
 
-Communication protocol must be versioned and extensible.
+The protocol is versioned and extensible. Its **normative definition** is:
 
-A packet should contain structured metadata similar to:
+- `docs/03_Protocol.md`
+- `docs/ADR/ADR-003-Wire-Format.md` — the byte-exact wire format
+- `docs/ADR/ADR-002-Transport-And-Ports.md` — sockets and ports
 
-- protocol version
-- packet type
-- device ID
-- user name
-- timestamp
-- sequence number
-- payload
+Never invent a packet layout. Never change one silently. Any format change requires a new ADR and a ProtocolVersion bump.
 
-Potential packet types include:
+### 23.1 Shape
 
-- DISCOVERY
-- HEARTBEAT
-- PING
-- PONG
-- VOICE_START
-- VOICE_DATA
-- VOICE_END
-- BUSY
-- FORCE_INTERRUPT
+Every packet is a fixed **72-byte big-endian header** plus a `0..1024` byte payload. Device IDs and Session IDs travel as **16-byte binary UUIDs**, not 36-byte ASCII.
 
-The protocol must be designed so that future packet types can be added without breaking existing clients.
+### 23.2 Packet types implemented in v1
 
-Current implementation should only implement required functionality.
+```
+DISCOVERY            DISCOVERY_RESPONSE
+HEARTBEAT            PING / PONG
+VOICE_START          VOICE_ACCEPT
+VOICE_DATA           VOICE_END
+BUSY                 SESSION_TERMINATE
+```
 
-Do NOT prematurely implement future features such as:
+`VOICE_ACCEPT` and `SESSION_TERMINATE` were added during document review: without a positive acknowledgement the sender state machine could never legally leave `REQUESTING`, and without a terminate packet an interrupted peer could never be told.
 
-- group calling
-- messaging
-- file transfer
+`FORCE_INTERRUPT`, `ERROR`, `GOODBYE`, `CAPABILITIES` are **reserved and unused in v1**.
 
-unless explicitly requested.
+### 23.3 Rules
 
----
+Unknown packet types must be ignored safely, never crash, and never spam the log.
+
+Do NOT prematurely implement future features such as group calling, messaging or file transfer.
 
 ## 24. Configuration
 
@@ -820,39 +804,27 @@ The application should feel like a digital walkie-talkie, not a social/chat appl
 
 ## 31. Performance Requirements
 
-Performance is a first-class requirement.
+Performance is a first-class requirement. These are measurable targets on the MTK P22 reference device, all expressed **as a percentage of one core**.
 
-Target:
+| Metric | Target | Conditions |
+|---|---|---|
+| Idle CPU | < 1% of one core | service running, screen off, no traffic, 10-minute average |
+| Transmit CPU | ≤ 15% of one core | capture + Opus encode + UDP send + recording write |
+| Receive CPU | ≤ 12% of one core | UDP receive + jitter buffer + decode + playback + recording write |
+| Java heap | < 32 MB | idle |
+| Total PSS | < 130 MB | idle, excluding the ASR model |
+| Mouth-to-ear latency | P50 ≤ 250 ms, P95 ≤ 400 ms | same AP |
+| Idle network | ≤ 1 broadcast packet / 5 s / device | heartbeat |
 
-idle CPU usage:
+### 31.1 About the memory numbers
 
-as close to 0% as practical.
+The earlier "approximately 30 MB" invited wasted optimization: a Compose + Room + DataStore app with a foreground service realistically sits at 60–120 MB PSS on Android 11. It is therefore split into two measurable figures: **Java heap < 32 MB** (a real constraint on the app's own allocations) and **total PSS < 130 MB** (a tripwire for abnormal growth).
 
-Target idle overhead:
+The ASR model is excluded from every target above.
 
-approximately below 1% when realistic.
+### 31.2 Discipline
 
-Voice operation:
-
-target low CPU utilization.
-
-Memory:
-
-keep normal application overhead very low.
-
-Reference target:
-
-approximately 30 MB when practical, excluding unavoidable runtime/library/model overhead.
-
-IMPORTANT:
-
-Speech recognition model memory usage is excluded from the normal idle target.
-
-Do not sacrifice stability merely to hit an arbitrary numeric benchmark.
-
-Measure performance on actual low-end hardware.
-
----
+Do not sacrifice stability to hit a number. Measure on real low-end hardware — code inspection is not a performance measurement.
 
 ## 32. Dependency Policy
 
@@ -970,28 +942,26 @@ docs/ADR/
 
 ## 37. Architecture Decision Records
 
-Important architectural decisions should be documented in:
+Important technical decisions live in `docs/ADR/`.
 
-docs/ADR/
+Any change to protocol format, database schema, module boundaries, public interfaces, persistent identifiers or Android compatibility handling requires an ADR **first**.
 
-Example:
+An accepted ADR is never edited silently. To change a decision, write a new ADR and mark the old one Superseded.
 
-ADR-001-Voice-Transport.md
-ADR-002-Audio-Codec.md
-ADR-003-Discovery-Strategy.md
+### 37.1 Current ADRs
 
-Each ADR should explain:
+| ADR | Subject |
+|---|---|
+| ADR-001 | Discovery strategy — pure UDP broadcast |
+| ADR-002 | Transport and ports — two sockets, two receive threads |
+| ADR-003 | Protocol wire format — 72-byte header, packet types, validation order |
+| ADR-004 | Audio parameters, Opus settings, jitter buffer, AudioFocus policy |
+| ADR-005 | Foreground service types, Android version compatibility, power locks |
+| ADR-006 | Offline Japanese ASR engine and model delivery |
 
-- context
-- problem
-- options considered
-- chosen solution
-- rationale
-- consequences
+**Read the relevant ADRs before implementing any task that touches those areas.** Where an ADR and a `docs/` file disagree, the ADR wins and the doc must be corrected.
 
-Do not rewrite history silently.
-
----
+Each ADR documents: context, problem, options considered, chosen solution, rationale, consequences.
 
 ## 38. Code Quality
 

@@ -56,23 +56,25 @@ App Private Files
 
 # 3. DataStore Responsibilities
 
-DataStore 负责保存：
+DataStore 负责保存以下 key。这是**完整清单**，实现不得随意增删：
 
-- Device ID
-- 本地用户名列表
-- 当前 Active User
-- App Language
-- Force Interrupt 设置
-- History Retention
-- ASR Enabled
-- 其它轻量级用户设置
-- 必要的后台运行偏好
+| Key | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `device_id` | String | 首次生成 UUID v4 | §4 |
+| `local_users` | 序列化列表 | 空 | §5 |
+| `active_user_id` | String? | null | §6 |
+| `app_language` | String | `ja` | §7 |
+| `allow_interrupt` | Boolean | **false** | §8，接收方策略 |
+| `history_retention` | Enum | `7_DAYS` | §29 |
+| `asr_enabled` | Boolean | **false** | §8 |
+| `asr_model_ready` | Boolean | false | ASR 模型是否已下载并校验通过 |
+| `overlay_enabled` | Boolean | false | 用户偏好，与系统权限分开 |
+| `first_launch_completed` | Boolean | false | 首启流程是否走完 |
+| `permission_guidance_shown` | Boolean | false | 权限引导是否已展示过 |
 
 不要把通信记录放入 DataStore。
 
 不要把大文本或音频放入 DataStore。
-
----
 
 # 4. Device Identity
 
@@ -218,34 +220,42 @@ ja。
 
 # 8. PTT Settings
 
-DataStore：
+## 8.1 allow_interrupt
 
-至少保存：
-
-```text
-interrupt_mode
-```
-
-值：
+DataStore key：
 
 ```text
-BUSY
-FORCE_INTERRUPT
+allow_interrupt
 ```
+
+类型：
+
+Boolean。
 
 默认：
 
-BUSY。
+**false**。
 
-其它设置可以包括：
+含义：
+
+> 允许其他设备打断我正在进行的通话。
+
+**这是接收方策略**（`03_Protocol §33.1`、`01_PRD §16`）。
+
+修订说明：
+
+原设计为单一枚举 `interrupt_mode: BUSY | FORCE_INTERRUPT`，语义上无法表达「这是谁的策略」。且 `01_PRD §16` / `04_UI_UX §22` 当时按发送方开关描述，与 `03_Protocol §33` 的接收方描述直接冲突。
+
+现统一为接收方 Boolean 开关。发送方不需要、也无法感知对方的策略。
+
+## 8.2 其它
 
 ```text
-asr_enabled
-overlay_enabled
-history_retention
+asr_enabled          Boolean, 默认 false
+asr_model_ready      Boolean, 默认 false
+history_retention    Enum,    默认 7_DAYS
+overlay_enabled      Boolean, 默认 false
 ```
-
----
 
 # 9. Room Database
 
@@ -291,30 +301,31 @@ saikai_ptt.db
 CommunicationRecord
 ```
 
-建议字段：
+字段（**规范定义**，`01_PRD §27` 与 `.claude/CLAUDE.md §16` 均以本节为准）：
 
-```text
-id
-senderDeviceId
-receiverDeviceId
-remoteDeviceId
-localUserId
-remoteUserName
-direction
-timestamp
-durationMs
-audioPath
-transcript
-transcriptStatus
-read
-favorite
-sessionId
-status
-createdAt
-updatedAt
-```
+| 字段 | 类型 | 可空 | 说明 |
+|---|---|---|---|
+| `id` | String (UUID) | 否 | Record ID，同时用作音频文件名（§20） |
+| `sessionId` | String (UUID) | 否 | 关联的 PTT Session（§12） |
+| `senderDeviceId` | String (UUID) | 否 | §14 |
+| `receiverDeviceId` | String (UUID) | 否 | §14 |
+| `remoteDeviceId` | String (UUID) | 否 | 冗余列，等于 sender/receiver 中非本机的一方，用于索引与查询（§14） |
+| `localUserId` | String (UUID) | 否 | 本机当时使用的 LocalUser（§15） |
+| `remoteUserName` | String | 否 | 通信发生时的名称快照（§16） |
+| `direction` | Enum | 否 | SEND / RECEIVE（§13） |
+| `timestamp` | Long | 否 | UTC epoch millis（§17） |
+| `durationMs` | Long | 否 | §18 |
+| `audioPath` | String | **是** | 应用私有目录相对路径；保存失败时为 null（§19） |
+| `audioFormat` | Enum | **是** | OPUS / AAC；audioPath 为 null 时为 null（§21） |
+| `transcript` | String | 是 | §22 |
+| `transcriptStatus` | Enum | 否 | 五态，默认 NOT_REQUESTED（§23） |
+| `isRead` | Boolean | 否 | §24 |
+| `isFavorite` | Boolean | 否 | 默认 false（§25） |
+| `status` | Enum | 否 | COMPLETED / INTERRUPTED / FAILED（§26） |
+| `createdAt` | Long | 否 | 记录创建时刻 |
+| `updatedAt` | Long | 否 | 最后修改时刻 |
 
----
+`remoteDeviceId` 是有意的冗余：它使「按对端设备查询历史」成为单列索引，而不需要在每次查询时对 sender/receiver 做条件判断。写入时一次性计算。
 
 # 11. Record ID
 
@@ -532,64 +543,61 @@ records/2026/09/05/e4b7.opus
 
 # 20. Audio File Naming
 
-建议：
+目录结构：
 
 ```text
 records/
+  .tmp/                  录制中的临时文件（§32）
   YYYY/
     MM/
       DD/
-        <recordId>.opus
+        <recordId>.<ext>
 ```
+
+扩展名由 `audioFormat` 决定：
+
+| audioFormat | 扩展名 |
+|---|---|
+| `OPUS` | `.opus`（Ogg 容器） |
+| `AAC` | `.m4a` |
 
 例如：
 
 ```text
-records/2026/09/05/e4b7....opus
+records/2026/09/05/e4b7c1a2-....opus
 ```
 
-Record ID：
+规则：
 
-作为文件名。
-
-避免：
-
-使用用户名作为文件名。
-
-用户名可以修改，也可能包含非法文件名字符。
-
----
+- Record ID 作为文件名。
+- **禁止**使用用户名作为文件名：用户名可修改，且可能包含非法文件名字符（含缅甸语、孟加拉语字符）。
+- 数据库保存的是**相对路径**，不含应用私有目录前缀（`§19`）。
 
 # 21. Audio Format
 
 首选：
 
-Opus。
+Opus（Ogg 容器），16 kHz 单声道，与传输编码一致（`ADR-004 §6`）。
 
-Fallback：
+回退：
 
 AAC。
 
-实际格式必须记录。
-
-可以增加：
+## 21.1 audioFormat 是必需字段
 
 ```text
-audioFormat
+audioFormat: OPUS | AAC
 ```
 
-例如：
+不得假设所有历史文件永远都是 Opus。文件扩展名与播放器选择均由该字段驱动（§20）。
 
-```text
-OPUS
-AAC
-```
+## 21.2 与传输编码的关系
 
-不要假设：
+`audioFormat` **仅描述本地存档文件**。
 
-所有历史文件永远都是 Opus。
+传输编码由 ProtocolVersion 固定（v1 = Opus，参数固定），**不做能力协商**。
 
----
+两者不得混淆：协议层没有 codec 协商字段，若一端擅自改用其它传输编码，语音将无法解码（`03_Protocol §21`）。
 
 # 22. Transcript
 
@@ -617,7 +625,7 @@ NULL 或根据实现使用中间状态。
 
 # 23. Transcript Status
 
-至少：
+**五态**：
 
 ```text
 NOT_REQUESTED
@@ -627,29 +635,19 @@ COMPLETED
 FAILED
 ```
 
-说明：
+| 状态 | 含义 |
+|---|---|
+| `NOT_REQUESTED` | ASR 未开启，本条记录不参与识别。**默认值** |
+| `PENDING` | 已加入识别队列 |
+| `PROCESSING` | 正在识别 |
+| `COMPLETED` | 识别成功，`transcript` 有值 |
+| `FAILED` | 识别失败（已达重试上限） |
 
-NOT_REQUESTED：
+因为 ASR 默认关闭，`NOT_REQUESTED` 是绝大多数记录的初始状态，**必须存在**。
 
-未要求识别。
+修订说明：
 
-PENDING：
-
-已经加入队列。
-
-PROCESSING：
-
-正在识别。
-
-COMPLETED：
-
-识别成功。
-
-FAILED：
-
-识别失败。
-
----
+`01_PRD §33` 与 `00_MasterPrompt §22` 原先只列 4 态，遗漏 `NOT_REQUESTED`。本节为规范定义，两处已同步修正。这是 Room 列的取值域，写错需要 migration。
 
 # 24. Read State
 
@@ -715,7 +713,7 @@ isFavorite = true
 
 # 26. Record Status
 
-建议：
+**三态**：
 
 ```text
 COMPLETED
@@ -723,52 +721,52 @@ INTERRUPTED
 FAILED
 ```
 
-COMPLETED：
+| 状态 | 含义 |
+|---|---|
+| `COMPLETED` | 完整的 PTT 会话，正常收到/发送 VOICE_END |
+| `INTERRUPTED` | 过程中提前结束：被强插终止、会话超时、WiFi 断开、AudioFocus 丢失、对端离线 |
+| `FAILED` | 会话建立成功但录音保存失败（`audioPath = null`） |
 
-完整 PTT。
+## 26.1 不引入 TIMEOUT 状态
 
-INTERRUPTED：
+`03_Protocol §23` 的会话超时归入 `INTERRUPTED`。
 
-过程中因网络、系统或强插等原因提前结束。
+具体中断原因记录在**日志**中，不进入数据库 schema——增加枚举值会带来 migration 成本，而 UI 对不同中断原因的呈现完全一致。
 
-FAILED：
+## 26.2 请求失败不生成记录
 
-建立或保存失败。
+被 BUSY 拒绝、或 500ms 无应答的请求，**不生成任何历史记录**（`01_PRD §10.4`）。
 
-即使：
+`FAILED` 仅用于「会话已建立但存储失败」的情况。
 
-FAILED
-
-也应尽可能保留已有可用数据。
-
----
+即使 `FAILED`，也应尽可能保留已有可用数据。
 
 # 27. Indexing
 
-为了支持历史搜索：
+为支持历史查询与搜索，Room 建立以下索引：
 
-Room 应建立必要索引。
+| 索引 | 用途 |
+|---|---|
+| `timestamp DESC` | 历史列表默认排序 |
+| `remoteDeviceId` | 按对端设备筛选 |
+| `remoteUserName` | 用户名搜索 |
+| `sessionId`（唯一） | 协议与数据库的关联键，同时防止同一会话重复插入 |
+| `isRead` | 未读筛选与角标计数 |
+| `isFavorite` | 收藏筛选与清理保护 |
+| `transcriptStatus` | ASR worker 查询待处理记录 |
+| `status` | 异常记录排查 |
 
-至少考虑：
+## 27.1 Transcript 搜索
 
-```text
-timestamp
-remoteDeviceId
-remoteUserName
-sessionId
-isRead
-isFavorite
-```
+v1 使用 `LIKE '%keyword%'` 实现。
 
-Transcript 搜索：
+理由：
 
-如果使用 SQLite FTS：
+单机历史记录量级（按 7 天默认保留、每天数十条计）在数千条以内，`LIKE` 扫描完全够用。
 
-应在 Architecture / implementation 阶段评估。
+**不引入 SQLite FTS**：FTS4/FTS5 会增加表结构复杂度、迁移成本与数据库体积，而日语分词效果对 FTS 默认 tokenizer 并不理想。
 
-不需要为了简单搜索而立即引入 FTS。
-
----
+若未来实测证明性能不足，再评估 FTS 并记录 ADR。
 
 # 28. Communication Query
 
@@ -1254,34 +1252,33 @@ History 故障：
 
 数据模型完成必须明确：
 
-- DataStore keys
+- DataStore keys **完整清单**与默认值（§3）
 - LocalUser model
 - Device ID
-- Active user
+- Active user 与自愈逻辑
 - App language
-- PTT settings
-- Room database
-- CommunicationRecord
-- Session ID relation
-- audioPath
-- transcript
-- transcript status
-- read state
-- favorite state
+- `allow_interrupt`（接收方策略）
+- Room database 与版本
+- CommunicationRecord **完整字段表**（§10）
+- Session ID 关联与唯一索引
+- `audioPath` 与 `audioFormat`
+- 文件命名与扩展名规则（§20）
+- transcript 与 transcript status（五态）
+- record status（三态）
+- read state / favorite state
 - history retention
-- cleanup strategy
+- cleanup strategy 与收藏保护
+- 正在录制文件的保护（§32）
+- 手动删除与批量删除（§38、§39）
 - migration strategy
 - orphan file handling
+- 索引清单（§27）
 
-完成后：
+完成后必须能够支持：
 
-必须能够支持：
-
-PTT → Recording → History → ASR → Playback → Cleanup
+PTT → Recording → History → ASR → Playback → Search → Delete → Cleanup
 
 完整生命周期。
-
----
 
 # 51. Final Data Principle
 
