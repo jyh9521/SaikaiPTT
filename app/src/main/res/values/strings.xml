@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Default resources are Japanese: it is the product's default language
+    (docs/01_PRD.md section 26). Other locales live in values-<code>/.
+    Full five-language support is Task10 and Task35.
+-->
+<resources>
+    <string name="app_name">西海PTT</string>
+    <string name="placeholder_subtitle">プロジェクトの初期化が完了しました</string>
+</resources>
