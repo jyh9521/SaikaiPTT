@@ -19,8 +19,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // ABI reservation. Task23 (Opus) and Task41 (Vosk) add native libraries;
-        // both must ship 16 KB page-aligned .so files, required by Android 15+.
+        // Task23 (Opus) and Task41 (Vosk) add native libraries. Both must ship
+        // 16 KB page-aligned .so files, required by Android 15+.
         // See docs/ADR/ADR-004 and ADR-006.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -29,9 +29,15 @@ android {
 
     buildTypes {
         release {
+            // In AGP 9 this single switch covers code shrinking AND resource
+            // optimisation; there is no separate shrinkResources property.
             optimization {
-                enable = false
+                enable = true
             }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
@@ -44,18 +50,72 @@ android {
         compose = true
         buildConfig = true
     }
+
+    packaging {
+        jniLibs {
+            // Store native libraries uncompressed and page-aligned in the APK.
+            // This is what lets the loader map .so files directly, and is a
+            // precondition for the 16 KB alignment requirement (ADR-004).
+            // Set explicitly rather than relying on the default, because it is
+            // load-bearing for Task23 and Task41.
+            useLegacyPackaging = false
+        }
+    }
+
+    lint {
+        // A lint error must break the build. docs/08_ReleaseChecklist.md
+        // section 5 forbids shipping with blocker-severity findings, and a
+        // warning nobody reads is not a control.
+        abortOnError = true
+        checkReleaseBuilds = true
+        explainIssues = true
+
+        // Not warningsAsErrors: at this size it turns unrelated advisories into
+        // build failures and trains people to disable lint. Specific issues are
+        // promoted individually below instead.
+        warningsAsErrors = false
+
+        // Third-party findings are not actionable here and would drown ours.
+        checkDependencies = false
+
+        // Hard-coded user-facing strings must never reach a build.
+        // docs/01_PRD.md section 26 and docs/04_UI_UX.md section 49 both forbid
+        // them, and i18n is mandatory from the start rather than retrofitted.
+        error += "HardcodedText"
+
+        // MissingTranslation stays a warning until Task35 lands all five
+        // locales; promoting it now would block every task in between.
+        warning += "MissingTranslation"
+
+        htmlReport = true
+        xmlReport = true
+        textReport = false
+    }
+
+    testOptions {
+        unitTests {
+            // Let JVM unit tests read resources and stubbed Android APIs rather
+            // than throwing. Protocol, session-state and storage logic lives in
+            // plain Kotlin (docs/02_Architecture.md section 5.1) precisely so it
+            // can be tested without a device, but tests that touch resources
+            // need this.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
+    // UI. The app is a walkie-talkie: big buttons, clear state, no decoration
+    // (docs/04_UI_UX.md section 4). Nothing beyond Compose and Material 3.
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    // Test
     testImplementation(libs.junit)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -63,6 +123,8 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 
+    // Debug-only tooling. Must never reach a release build
+    // (docs/08_ReleaseChecklist.md section 43).
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
