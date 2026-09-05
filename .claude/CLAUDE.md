@@ -1073,26 +1073,69 @@ CLAUDE.md contains project-wide behavioral rules.
 
 ---
 
-## 43. Git Discipline
+## 43. Git Discipline and Repository Sync
 
-Use meaningful commit messages.
+Remote:
 
-Preferred pattern:
+```text
+https://github.com/jyh9521/SaikaiPTT
+```
 
+Branch: `main`
+
+### 43.1 Commit after every piece of work
+
+Every completed task ends with a commit. Never leave finished work
+uncommitted — the point of committing per task is to be able to roll back
+to any known-good state.
+
+Message pattern:
+
+```text
 feat: ...
 fix: ...
 refactor: ...
 test: ...
 docs: ...
 chore: ...
+```
 
-Each completed task should ideally have a dedicated commit.
+Rules:
 
-Do not mix unrelated tasks into one commit.
+- One task, one commit. Do not mix unrelated tasks.
+- The subject line says what changed; the body says **why**, especially for
+  decisions that a future reader would otherwise have to re-derive.
+- Never commit secrets, keystores, tokens, or ASR model files.
+- Leave the working tree clean at the end of a task.
 
-Do not commit secrets.
+### 43.2 Push
 
----
+Push to `origin main` after each task's commit, so the remote is never more
+than one task behind local.
+
+If the environment cannot authenticate to GitHub (a sandbox without the
+user's credentials), still commit locally, then **tell the user explicitly
+that the commits are local and need pushing**, and give them the command.
+Never silently leave work unpushed and unmentioned.
+
+### 43.3 Tags
+
+Tag the completion of each phase (`06_DevelopmentPlan.md §3`):
+
+```text
+phase-0-baseline
+phase-1-skeleton
+phase-2-core
+...
+```
+
+and every release candidate:
+
+```text
+v0.1.0-rc1
+```
+
+Tags are the cheap rollback points between the fine-grained per-task commits.
 
 ## 44. Final Priority
 
