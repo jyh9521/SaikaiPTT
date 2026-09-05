@@ -1,0 +1,1278 @@
+# SaikaiPTT Release Checklist
+
+## 1. Purpose
+
+本文档定义 SaikaiPTT 发布 Release Candidate 和正式版本前必须完成的检查项。
+
+发布目标：
+
+> 只发布已经经过构建、自动化测试、真实设备测试、网络测试、后台测试、性能测试和数据完整性验证的版本。
+
+不得因为“功能已经完成”就直接发布。
+
+---
+
+# 2. Release Principles
+
+Release 前必须优先确认：
+
+1. 核心 PTT 稳定
+2. 后台接收可靠
+3. 网络自动恢复正常
+4. 录音和历史记录可靠
+5. 低端设备可运行
+6. Android 11+ 兼容
+7. 隐私和本地数据要求满足
+8. 国际化完整
+9. Debug 功能不会泄漏到 Release
+10. 没有阻塞性 Crash / ANR
+
+---
+
+# 3. Version Information
+
+Release 前确认：
+
+- versionName
+- versionCode
+- applicationId
+- minSdk
+- targetSdk
+- compileSdk
+- release signing configuration
+- package name
+
+Application namespace：
+
+```text
+com.saikai.ptt
+```
+
+Display name：
+
+```text
+西海PTT
+```
+
+---
+
+# 4. Build Validation
+
+必须成功：
+
+```text
+Debug build
+Release build
+```
+
+检查：
+
+- Kotlin compilation
+- resources
+- manifest
+- Gradle dependencies
+- packaging
+- signing
+
+Release build：
+
+不得依赖：
+
+- 本地绝对路径
+- 开发机文件
+- Debug-only dependency
+- 未提交资源
+
+---
+
+# 5. Static Analysis
+
+Release 前执行：
+
+- Android Lint
+- Kotlin compiler checks
+- Gradle checks
+- unit tests
+
+所有 blocker / fatal 问题：
+
+必须解决。
+
+Warnings：
+
+需要确认是否可以接受。
+
+---
+
+# 6. Dependency Review
+
+检查所有 dependencies：
+
+- 是否仍然需要
+- 是否兼容 Android 11+
+- 是否有明显安全问题
+- 是否增加不必要 APK 体积
+- 是否增加明显内存负担
+- 是否存在更轻量替代方案
+
+删除：
+
+未使用依赖。
+
+---
+
+# 7. Network Functionality
+
+验证：
+
+## Discovery
+
+至少两台设备：
+
+同一 WiFi。
+
+可以互相发现。
+
+## Heartbeat
+
+在线状态：
+
+稳定。
+
+离线：
+
+正确检测。
+
+## Endpoint
+
+IP 改变：
+
+Device ID 不变。
+
+Peer endpoint 正确更新。
+
+---
+
+# 8. PTT Core
+
+验证：
+
+- Target selection
+- PTT press
+- PTT hold
+- PTT release
+- VOICE_START
+- VOICE_DATA
+- VOICE_END
+
+必须：
+
+一对一。
+
+必须：
+
+只有目标设备收到语音。
+
+---
+
+# 9. PTT Latency
+
+测量：
+
+发言：
+
+到：
+
+接收播放：
+
+的延迟。
+
+建议记录：
+
+- P50
+- P95
+- Max
+
+任何明显异常：
+
+必须调查。
+
+---
+
+# 10. PTT Audio Quality
+
+测试：
+
+- 安静环境
+- 普通室内
+- 背景噪声
+- 轻声
+- 正常说话
+- 大声
+- 快速讲话
+- 短语音
+- 长语音
+
+确认：
+
+- 无严重失真
+- 无持续爆音
+- 无明显卡顿
+- 无持续断音
+- 无严重延迟
+
+---
+
+# 11. Busy Mode
+
+测试：
+
+A → B。
+
+B 正在通信。
+
+C → B。
+
+Expected：
+
+C：
+
+收到 BUSY。
+
+A → B：
+
+继续。
+
+---
+
+# 12. Force Interrupt
+
+开启：
+
+Force Interrupt。
+
+测试：
+
+A → B。
+
+C → B。
+
+Expected：
+
+A Session：
+
+结束。
+
+C：
+
+建立新 Session。
+
+---
+
+# 13. Force Interrupt Race
+
+C / D：
+
+同时强插 B。
+
+Expected：
+
+最终：
+
+只有一个有效 Session。
+
+不得：
+
+多人同时播放。
+
+---
+
+# 14. Background
+
+测试：
+
+- App foreground
+- App background
+- screen off
+- device locked
+- long idle
+
+后台：
+
+仍能接收 PTT。
+
+---
+
+# 15. Foreground Service
+
+检查：
+
+服务启动。
+
+服务停止。
+
+应用进入后台。
+
+应用回到前台。
+
+资源：
+
+正确创建。
+
+正确释放。
+
+---
+
+# 16. Notification
+
+检查：
+
+- notification exists
+- localized
+- low-frequency update
+- no notification spam
+
+Android 不同版本：
+
+行为正确。
+
+---
+
+# 17. Overlay
+
+权限：
+
+关闭。
+
+Expected：
+
+不能显示。
+
+权限：
+
+开启。
+
+Expected：
+
+绿色。
+
+收到：
+
+红色。
+
+结束：
+
+恢复绿色。
+
+点击：
+
+打开 App。
+
+---
+
+# 18. Network Recovery
+
+测试：
+
+1. WiFi off
+2. WiFi on
+3. IP change
+4. router reconnect
+5. airplane mode
+
+Expected：
+
+- no crash
+- Peer state recovery
+- discovery restart
+- heartbeat restart
+
+---
+
+# 19. Device Identity
+
+验证：
+
+- First install → generate UUID
+- App restart → same UUID
+- device reboot → same UUID
+- IP change → same UUID
+
+---
+
+# 20. Username
+
+验证：
+
+- first user creation
+- multiple users
+- switching
+- editing
+- deletion
+- last-user protection
+
+远程 Peer：
+
+能够收到：
+
+正确用户名。
+
+---
+
+# 21. Internationalization
+
+必须验证：
+
+- ja
+- zh-CN
+- en
+- my
+- bn
+
+包括：
+
+- Home
+- PTT
+- Settings
+- History
+- Overlay
+- Notification
+- Errors
+- Permission guidance
+
+检查：
+
+- text overflow
+- broken layout
+- untranslated strings
+- hard-coded strings
+
+---
+
+# 22. History
+
+验证：
+
+每次完成 PTT：
+
+正确生成：
+
+CommunicationRecord。
+
+检查：
+
+- ID
+- SessionId
+- sender
+- receiver
+- direction
+- username
+- timestamp
+- duration
+- audio path
+- transcript state
+- read
+- favorite
+- status
+
+---
+
+# 23. Recording
+
+检查：
+
+- file creation
+- correct format
+- duration
+- path
+- database relation
+
+异常情况：
+
+- storage full
+- interrupted PTT
+- network disconnect
+
+不得：
+
+导致 App Crash。
+
+---
+
+# 24. Playback
+
+测试：
+
+- Play
+- Pause
+- Resume
+- Stop
+
+文件不存在：
+
+必须：
+
+显示错误。
+
+不得：
+
+Crash。
+
+---
+
+# 25. ASR
+
+验证：
+
+默认：
+
+Disabled。
+
+开启：
+
+PTT 完成。
+
+状态：
+
+PENDING
+
+↓
+
+PROCESSING
+
+↓
+
+COMPLETED
+
+或：
+
+FAILED
+
+---
+
+# 26. ASR Offline
+
+关闭互联网。
+
+Expected：
+
+仍能：
+
+- 保存录音
+- 识别
+- 保存日语 transcript
+
+---
+
+# 27. ASR Failure
+
+模拟：
+
+- 模型加载失败
+- 文件损坏
+- 存储不足
+- 识别失败
+
+Expected：
+
+PTT：
+
+继续正常。
+
+录音：
+
+仍能播放。
+
+---
+
+# 28. History Search
+
+测试：
+
+用户名搜索。
+
+Transcript 搜索。
+
+空搜索。
+
+特殊字符。
+
+中文。
+
+日语。
+
+缅甸语。
+
+孟加拉语。
+
+---
+
+# 29. Favorite
+
+收藏：
+
+不被普通 cleanup 删除。
+
+取消收藏：
+
+恢复普通生命周期。
+
+---
+
+# 30. Unread
+
+新接收：
+
+Unread。
+
+打开：
+
+Read。
+
+状态：
+
+重启后保持。
+
+---
+
+# 31. Cleanup
+
+测试：
+
+- 1 day
+- 3 days
+- 7 days
+- 30 days
+- Forever
+
+确认：
+
+数据库：
+
+删除。
+
+音频：
+
+删除。
+
+Orphan：
+
+处理。
+
+---
+
+# 32. Storage Consistency
+
+制造：
+
+- database failure
+- file deletion failure
+- file creation failure
+
+确认：
+
+不会产生大量永久 orphan。
+
+Cleanup 可以：
+
+后续修复。
+
+---
+
+# 33. Low-End Device
+
+至少测试：
+
+MTK P22-class。
+
+Android 11。
+
+4 GB RAM。
+
+后台运行：
+
+长时间。
+
+测试：
+
+- discovery
+- heartbeat
+- PTT
+- recording
+- history
+- overlay
+
+---
+
+# 34. Modern Device
+
+至少测试：
+
+现代旗舰 Android。
+
+建议：
+
+Samsung Galaxy flagship。
+
+验证：
+
+Android 13+
+
+Android 14+
+
+Android 15+
+
+Android 16+
+
+---
+
+# 35. Long-Term Stability
+
+建议：
+
+8~24 小时。
+
+后台。
+
+期间：
+
+周期性：
+
+- discovery
+- heartbeat
+- PTT
+- history
+- ASR
+
+Expected：
+
+- no crash
+- no ANR
+- no uncontrolled memory growth
+- no socket leak
+- no audio resource leak
+
+---
+
+# 36. Memory
+
+观察：
+
+- Activity
+- Service
+- Socket
+- AudioRecord
+- AudioTrack
+- Overlay
+- ASR
+
+重复：
+
+foreground → background
+
+多次。
+
+Expected：
+
+内存最终稳定。
+
+---
+
+# 37. CPU
+
+测量：
+
+- idle
+- heartbeat
+- discovery
+- PTT
+- ASR
+
+后台空闲：
+
+尽量接近最低水平。
+
+不得：
+
+长期高 CPU。
+
+---
+
+# 38. Battery
+
+比较：
+
+- App stopped
+- App idle foreground
+- App idle background
+- PTT usage
+- ASR enabled
+
+记录：
+
+单位时间电量消耗。
+
+发现异常：
+
+必须调查。
+
+---
+
+# 39. Network Traffic
+
+测量：
+
+Idle：
+
+heartbeat。
+
+Discovery：
+
+发现流量。
+
+PTT：
+
+voice traffic。
+
+确认：
+
+待机不会出现：
+
+持续高流量。
+
+---
+
+# 40. Permission
+
+分别拒绝：
+
+- microphone
+- notification
+- overlay
+
+Expected：
+
+不会 Crash。
+
+UI：
+
+给出本地化指导。
+
+---
+
+# 41. Lifecycle
+
+测试：
+
+- rotation
+- background
+- foreground
+- process recreation
+- app restart
+- device reboot
+
+核心服务：
+
+不应因为 Activity 重建而意外停止。
+
+---
+
+# 42. Security Validation
+
+测试：
+
+非法 packet。
+
+异常 Device ID。
+
+错误 Target。
+
+巨大 payload。
+
+未知 PacketType。
+
+重复 packet。
+
+异常 sequence。
+
+Expected：
+
+安全丢弃。
+
+不 Crash。
+
+不产生无限资源消耗。
+
+---
+
+# 43. Release Logging
+
+Release build：
+
+必须确认：
+
+DEBUG log：
+
+关闭。
+
+详细 packet logging：
+
+关闭。
+
+测试面板：
+
+隐藏。
+
+Mock：
+
+移除。
+
+Fake implementation：
+
+移除。
+
+Test button：
+
+移除。
+
+---
+
+# 44. Privacy Review
+
+确认：
+
+没有：
+
+- cloud audio
+- cloud ASR
+- cloud history
+- unexpected telemetry
+
+录音：
+
+只保存本地。
+
+Transcript：
+
+只保存本地。
+
+---
+
+# 45. File System Review
+
+检查：
+
+应用私有目录。
+
+确认：
+
+- 不写入不必要的公共目录
+- 文件命名稳定
+- 没有大量临时文件
+- orphan cleanup 正常
+
+---
+
+# 46. Database Review
+
+检查：
+
+Room schema。
+
+确认：
+
+Migration：
+
+正确。
+
+禁止：
+
+生产版本依赖 destructive migration。
+
+---
+
+# 47. Backup Review
+
+确认：
+
+Android 系统 backup 行为。
+
+根据产品隐私要求：
+
+决定是否排除：
+
+- communication history
+- recordings
+- transcripts
+
+---
+
+# 48. Accessibility
+
+检查：
+
+- TalkBack
+- content descriptions
+- touch target size
+- readable text
+- non-color-only states
+
+PTT：
+
+必须可理解。
+
+---
+
+# 49. UI Review
+
+确认：
+
+- layout
+- typography
+- button state
+- loading
+- empty state
+- error state
+- busy
+- receiving
+- transmitting
+- history
+- settings
+
+无明显：
+
+- overflow
+- clipping
+- broken navigation
+
+---
+
+# 50. Production Environment
+
+Release：
+
+不得依赖：
+
+开发电脑。
+
+开发 WiFi。
+
+开发 IP。
+
+本地服务器。
+
+测试数据库。
+
+Mock network。
+
+---
+
+# 51. Reproducible Build
+
+尽可能确保：
+
+相同代码和配置：
+
+可以稳定生成 Release APK。
+
+记录：
+
+- Gradle version
+- Kotlin version
+- Android Gradle Plugin
+- compile SDK
+- dependencies
+
+---
+
+# 52. README
+
+Release 前：
+
+README 必须包含：
+
+- 项目介绍
+- 核心功能
+- Android 要求
+- 安装方法
+- 权限说明
+- 使用方法
+- 已知限制
+- 开发方法
+
+---
+
+# 53. CHANGELOG
+
+Release：
+
+必须记录：
+
+- 新功能
+- 修复
+- 兼容性变化
+- 已知问题
+
+格式建议：
+
+```text
+## x.x.x
+
+### Added
+### Changed
+### Fixed
+### Known Issues
+```
+
+---
+
+# 54. Known Issues
+
+任何已知：
+
+- Crash
+- ANR
+- PTT failure
+- background failure
+- data loss
+- serious audio issue
+
+必须明确记录。
+
+Release blocker：
+
+不可隐藏。
+
+---
+
+# 55. Release Candidate Rule
+
+RC 构建必须：
+
+通过：
+
+核心 PTT。
+
+后台。
+
+网络恢复。
+
+录音。
+
+播放。
+
+历史。
+
+ASR。
+
+i18n。
+
+低端设备。
+
+旗舰设备。
+
+---
+
+# 56. Final Release Gate
+
+以下任何一项失败：
+
+不得正式发布：
+
+- One-to-one PTT
+- Background Receive
+- Network Recovery
+- Busy
+- Recording
+- Playback
+- Data Integrity
+- Android 11 compatibility
+- Low-end device stability
+
+---
+
+# 57. Final Sign-Off
+
+Release 前必须明确记录：
+
+## Build
+
+Build successful.
+
+## Tests
+
+All required tests passed.
+
+## Devices
+
+Tested devices listed.
+
+## Known Issues
+
+Documented.
+
+## Performance
+
+Measured.
+
+## Privacy
+
+Reviewed.
+
+## Release Logging
+
+Disabled.
+
+## Version
+
+Confirmed.
+
+---
+
+# 58. Definition of Release Ready
+
+只有同时满足：
+
+```text
+Build
++
+Tests
++
+Real Devices
++
+Network
++
+Audio
++
+Background
++
+Storage
++
+ASR
++
+i18n
++
+Performance
++
+Privacy
+```
+
+才能标记：
+
+```text
+RELEASE READY
+```
+
+---
+
+# 59. Final Principle
+
+SaikaiPTT 的正式发布标准不是：
+
+> “大部分功能都能用。”
+
+而是：
+
+> “核心通信在真实 Android 设备和真实 WiFi 环境中可靠工作，并且异常情况下不会轻易崩溃或破坏用户数据。”
+
+稳定性永远优先于发布日期。
