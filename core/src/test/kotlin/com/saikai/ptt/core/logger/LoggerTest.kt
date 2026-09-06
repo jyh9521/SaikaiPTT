@@ -76,6 +76,39 @@ class LoggerTest {
         )
     }
 
+    @Test
+    fun `errors are never suppressed by category`() {
+        // Categories cap volume, not diagnosis. NETWORK is off in release
+        // because it logs per packet -- but a network error is rare and is
+        // precisely what someone reading a field report needs.
+        val sink = RecordingSink()
+        val log = logger(LoggingConfig.release(), sink)
+
+        LogCategory.entries.forEach { category ->
+            log.e(category) { "failure in $category" }
+        }
+
+        assertEquals(
+            "Every category must still be able to report an error",
+            LogCategory.entries.size,
+            sink.entries.size,
+        )
+    }
+
+    @Test
+    fun `the category bypass applies only to errors`() {
+        // The bypass must stay narrow. A warning in a disabled category is
+        // still volume -- the throttled invalid-packet path logs at WARN -- so
+        // only ERROR is exempt.
+        val sink = RecordingSink()
+        val log = logger(LoggingConfig.release(), sink)
+
+        log.w(LogCategory.NETWORK) { "warning in a disabled category" }
+        log.e(LogCategory.NETWORK) { "error in a disabled category" }
+
+        assertEquals(listOf("ERROR/NETWORK: error in a disabled category"), sink.entries)
+    }
+
     // --- The performance requirement ----------------------------------------
 
     @Test

@@ -378,8 +378,20 @@ data class LoggingConfig(
     /** Guards against a per-packet log path becoming a performance problem. */
     val maxEntriesPerSecondPerKind: Int = 1,
 ) {
+    /**
+     * Errors bypass the category filter.
+     *
+     * Categories exist to suppress volume -- per-packet and per-frame logging
+     * that would cost battery and bury everything else. An error is neither:
+     * it is rare and it is the reason someone is reading the log. Dropping
+     * ERROR from NETWORK in release would mean a field report of "it stopped
+     * receiving" arrives with every network error already discarded.
+     *
+     * [minLevel] still applies, so a config can silence errors deliberately.
+     */
     fun isEnabled(level: LogLevel, category: LogCategory): Boolean =
-        level.isAtLeast(minLevel) && category in enabledCategories
+        level.isAtLeast(minLevel) &&
+            (level == LogLevel.ERROR || category in enabledCategories)
 
     companion object {
         fun debug(): LoggingConfig = LoggingConfig(

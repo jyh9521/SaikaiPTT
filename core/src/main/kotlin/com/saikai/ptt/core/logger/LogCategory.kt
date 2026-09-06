@@ -25,12 +25,16 @@ enum class LogCategory {
 
     companion object {
         /**
-         * Categories that stay on in release builds.
+         * Categories that stay on in release builds **below ERROR level**.
          *
          * Deliberately narrow. The realtime path (protocol, audio, network) logs
          * per packet or per frame -- 50 packets a second during a call -- so
          * leaving it enabled in release would cost battery and bury anything
          * useful. `docs/03_Protocol.md` section 50.
+         *
+         * Errors are never filtered by category; see
+         * [com.saikai.ptt.core.config.LoggingConfig.isEnabled]. This set
+         * suppresses volume, not diagnosis.
          */
         val RELEASE_DEFAULT: Set<LogCategory> = setOf(
             LIFECYCLE,
