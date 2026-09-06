@@ -2,7 +2,11 @@ package com.saikai.ptt.di
 
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
+import com.saikai.ptt.core.domain.AppSettings
+import com.saikai.ptt.core.domain.SettingsRepository
 import com.saikai.ptt.core.logger.LogSink
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -18,8 +22,22 @@ class AppContainerTest {
      * Assembles the container with a sink that goes nowhere. The real one writes
      * to `android.util.Log`, whose stubs throw in a plain JVM test.
      */
-    private fun container(isDebugBuild: Boolean) =
-        AppContainer(isDebugBuild = isDebugBuild, logSink = LogSink.None)
+    private fun container(isDebugBuild: Boolean) = AppContainer(
+        isDebugBuild = isDebugBuild,
+        logSink = LogSink.None,
+        settingsRepositoryFactory = { InMemorySettings() },
+    )
+
+    /** Keeps the container assemblable without DataStore, which needs Android. */
+    private class InMemorySettings : SettingsRepository {
+        private val state = MutableStateFlow(AppSettings.DEFAULT)
+        override val settings: Flow<AppSettings> = state
+        override suspend fun current(): AppSettings = state.value
+        override suspend fun update(transform: (AppSettings) -> AppSettings): AppSettings {
+            state.value = transform(state.value)
+            return state.value
+        }
+    }
 
     @Test
     fun `release builds get release logging`() {

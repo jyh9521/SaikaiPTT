@@ -47,7 +47,7 @@ if [ -z "$COMPILER" ] || [ -z "$STDLIB" ]; then
 fi
 
 SOURCES=("core/src/main/kotlin")
-TARGET_CP="$STDLIB"
+TARGET_CP="$STDLIB:$COROUTINES"
 
 if [ "${1:-}" = "--with-tests" ]; then
   JUNIT=$(jar junit/junit "junit-4.13.2.jar")

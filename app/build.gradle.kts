@@ -120,6 +120,14 @@ dependencies {
     // back: core knows nothing about Android, Compose or this module.
     implementation(project(":core"))
 
+    // Settings storage. DataStore replaces SharedPreferences and is the only
+    // persistence for small structured configuration; communication history is
+    // Room (docs/05_DataModel.md section 2).
+    implementation(libs.androidx.datastore.preferences)
+
+    // Main-thread dispatcher. coroutines-core arrives transitively through :core.
+    implementation(libs.kotlinx.coroutines.android)
+
     // UI. The app is a walkie-talkie: big buttons, clear state, no decoration
     // (docs/04_UI_UX.md section 4). Nothing beyond Compose and Material 3.
     implementation(platform(libs.androidx.compose.bom))

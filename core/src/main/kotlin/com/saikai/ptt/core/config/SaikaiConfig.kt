@@ -3,7 +3,6 @@ package com.saikai.ptt.core.config
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -350,24 +349,19 @@ data class RateLimitConfig(
     }
 }
 
-/** History retention and transcription. Normative source: `docs/05_DataModel.md`. */
+/**
+ * Transcription tuning. Normative source: `docs/05_DataModel.md`.
+ *
+ * Retention is not here. It is a user setting with a stored default, not a
+ * tunable, so it lives with the other settings as
+ * [com.saikai.ptt.core.domain.HistoryRetention].
+ */
 data class HistoryConfig(
-    val defaultRetention: Retention = Retention.SEVEN_DAYS,
     /** Bounded: a recording that cannot be transcribed must not be retried forever. */
     val asrMaxRetries: Int = 3,
 ) {
     init {
         require(asrMaxRetries in 0..10) { "Unbounded ASR retries would burn battery on a bad file" }
-    }
-
-    enum class Retention(val duration: Duration?) {
-        ONE_DAY(1.days),
-        THREE_DAYS(3.days),
-        SEVEN_DAYS(7.days),
-        THIRTY_DAYS(30.days),
-
-        /** Kept until the user deletes it. */
-        FOREVER(null),
     }
 }
 

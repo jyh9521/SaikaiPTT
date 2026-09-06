@@ -2,6 +2,7 @@ package com.saikai.ptt
 
 import android.app.Application
 import com.saikai.ptt.di.AppContainer
+import com.saikai.ptt.storage.DataStoreSettingsRepository
 
 /**
  * Owns the application-scope dependency container.
@@ -16,5 +17,12 @@ class SaikaiApplication : Application() {
      * Built lazily so that a process created only to run a ContentProvider or a
      * broadcast receiver does not pay for it.
      */
-    val container: AppContainer by lazy { AppContainer(isDebugBuild = BuildConfig.DEBUG) }
+    val container: AppContainer by lazy {
+        AppContainer(
+            isDebugBuild = BuildConfig.DEBUG,
+            settingsRepositoryFactory = { logger ->
+                DataStoreSettingsRepository.create(this, logger)
+            },
+        )
+    }
 }

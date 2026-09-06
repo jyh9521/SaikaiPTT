@@ -29,7 +29,13 @@ kotlin {
 }
 
 dependencies {
+    // Flow lives in coroutines, not the stdlib. This is core's only dependency
+    // beyond the Kotlin standard library, and it stays that way: the module has
+    // to remain runnable in a plain JVM test.
+    api(libs.kotlinx.coroutines.core)
+
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.withType<Test>().configureEach {

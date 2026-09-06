@@ -1,6 +1,7 @@
 package com.saikai.ptt.di
 
 import com.saikai.ptt.core.config.SaikaiConfig
+import com.saikai.ptt.core.domain.SettingsRepository
 import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.logging.AndroidLogSink
@@ -22,10 +23,14 @@ import com.saikai.ptt.logging.AndroidLogSink
  *   here, so the container stays constructible in a plain JVM test.
  * @param logSink overridable so a JVM test can assemble the container without
  *   `android.util.Log`, which throws outside an instrumented environment.
+ * @param settingsRepositoryFactory takes the assembled [Logger] and returns the
+ *   settings store. Passed as a factory rather than a Context so the container
+ *   itself needs no Android types and stays constructible in a plain JVM test.
  */
 class AppContainer(
     isDebugBuild: Boolean,
     logSink: LogSink = AndroidLogSink(),
+    settingsRepositoryFactory: (Logger) -> SettingsRepository,
 ) {
 
     /**
@@ -39,4 +44,13 @@ class AppContainer(
      * one place.
      */
     val logger: Logger = Logger(config.logging, logSink)
+
+    /**
+     * The single entry point for persisted settings. Nothing else in the app
+     * opens DataStore (`docs/05_DataModel.md` section 3).
+     *
+     * Lazy: a process started only for a broadcast receiver should not open the
+     * store until something actually reads a setting.
+     */
+    val settingsRepository: SettingsRepository by lazy { settingsRepositoryFactory(logger) }
 }
