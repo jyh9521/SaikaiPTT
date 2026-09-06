@@ -16,35 +16,44 @@
 agp = "9.4.0"
 kotlin = "2.2.10"
 
-# Android SDK. minSdk 30 is a product requirement (Android 11, .claude/CLAUDE.md section 4).
-# compileSdk/targetSdk 36 is Android 16. API 36.1 is installed on this machine but is a
-# minor SDK version with younger tooling support, and the binding constraint for this
-# product is low-end Android 11 stability, not newest-API access.
-compileSdk = "36"
+# Android SDK.
+#
+# minSdk 30 is a product requirement (Android 11, .claude/CLAUDE.md section 4).
+#
+# compileSdk and targetSdk are deliberately different, and that is the normal
+# configuration rather than an oversight:
+#
+#   compileSdk 37 -- which APIs the code may compile against. Kept at the newest
+#     available so dependencies stay upgradable; AndroidX libraries increasingly
+#     require compiling against the current SDK. Changing it does not alter any
+#     runtime behaviour.
+#
+#   targetSdk 36 -- which runtime behaviour changes the app opts in to. This is
+#     the one that affects users, so it moves only after the behaviour has been
+#     tested on real devices. Reviewed at release, see
+#     docs/08_ReleaseChecklist.md section 3.
+compileSdk = "37"
 minSdk = "30"
 targetSdk = "36"
 
-# 这些是**已验证可构建**的版本组合，不要单独升其中一项。
+# 升级依赖前，先确认它对 compileSdk 的要求。
 #
-# 教训：lint 的 GradleDependency 会报出更新的版本，但那些建议是**成组**的。
-# 把 compose-bom 升到 2026.08.00（对应 Compose 1.12.0）而不同时把 compileSdk
-# 升到 37，会在 checkAarMetadata 阶段直接失败——Compose 1.12 要求
-# compileSdk >= 37。升级依赖前必须先确认它对 compileSdk 的要求。
-#
-# 提高 compileSdk 与提高 targetSdk 是两件事：前者只决定能编译哪些 API，
-# 后者才是运行时行为的opt-in。见 docs/08_ReleaseChecklist.md 第 3 节。
+# 这里踩过一次：把 compose-bom 升到 2026.08.00（Compose 1.12.0）而 compileSdk
+# 还停在 36，会在 checkAarMetadata 阶段直接失败，连编译都走不到。lint 的
+# GradleDependency 建议是**成组**的——它同时建议升 compileSdk，正是因为它推荐的
+# 库版本需要。只采纳其中一半就会坏。
 #
 # Kotlin 有意停留在 2.2.10：AGP 9 内置 Kotlin 支持，编译器版本由 AGP 决定，
 # 单独把 kotlin.plugin.compose 升到 2.4.10 会与内置编译器版本错配。
 
 # UI
-composeBom = "2026.02.01"
-activityCompose = "1.8.0"
+composeBom = "2026.08.00"
+activityCompose = "1.13.0"
 
 # Test
 junit = "4.13.2"
-junitVersion = "1.1.5"
-espressoCore = "3.5.1"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
 
 # --- Removed at Task03 as unused ---------------------------------------------
 # androidx.core:core-ktx and androidx.lifecycle:lifecycle-runtime-ktx shipped in

@@ -56,7 +56,8 @@ tasks/                       具体实现任务
 | Gradle | 9.6.0 | `gradle/wrapper/gradle-wrapper.properties` |
 | Android Gradle Plugin | 9.4.0 | `gradle/libs.versions.toml` |
 | Kotlin | 2.2.10 | `gradle/libs.versions.toml` |
-| compileSdk / targetSdk | 36（Android 16） | `gradle/libs.versions.toml` |
+| compileSdk | 37 | `gradle/libs.versions.toml` |
+| targetSdk | 36（Android 16） | `gradle/libs.versions.toml` |
 | minSdk | 30（Android 11） | `gradle/libs.versions.toml` |
 | Java 源码/目标兼容性 | 11 | `app/build.gradle.kts` |
 | Gradle 守护进程 JVM | toolchain 25 | `gradle/gradle-daemon-jvm.properties` |
@@ -65,6 +66,13 @@ tasks/                       具体实现任务
 `gradle-daemon-jvm.properties` 已纳入版本控制：它固定了执行构建的 JVM 版本，并让 Gradle 在缺失时自动下载对应 JDK，克隆仓库的人无需手动配置 JDK。
 
 AGP 9 内置 Kotlin 支持，因此**不需要**单独的 `org.jetbrains.kotlin.android` 插件。
+
+`compileSdk` 与 `targetSdk` 有意不同，这是常规配置而非疏漏：
+
+- **compileSdk 37** 决定代码能编译哪些 API。保持在最新，让依赖可以持续升级——AndroidX 的库越来越要求用当前 SDK 编译。改动它**不影响任何运行时行为**。
+- **targetSdk 36** 决定应用主动接受哪些运行时行为变更。这一项才会影响用户，因此只在真机验证过之后才推进。发布前复核见 `docs/08_ReleaseChecklist.md` §3。
+
+构建 `compileSdk 37` 需要安装对应 SDK 平台（Android Studio → Tools → SDK Manager → SDK Platforms → Android 37）。
 
 ### 依赖清单
 
@@ -86,6 +94,8 @@ AGP 9 内置 Kotlin 支持，因此**不需要**单独的 `org.jetbrains.kotlin.
 | `androidx.compose.ui:ui-test-manifest` | **debugImplementation** | 测试 Activity，不得进入 Release |
 
 Task03 移除了模板自带但零引用的 `androidx.core:core-ktx` 与 `androidx.lifecycle:lifecycle-runtime-ktx`，待实际需要时再由对应任务加回。
+
+依赖版本以 `gradle/libs.versions.toml` 为准。**升级任何依赖前先确认它对 `compileSdk` 的要求**——AndroidX 库会在 AAR 元数据里声明最低 compileSdk，不满足时构建在 `checkAarMetadata` 阶段就会失败。
 
 ### 构建类型
 
