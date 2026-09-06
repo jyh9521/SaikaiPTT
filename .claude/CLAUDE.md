@@ -1153,13 +1153,31 @@ Rules:
 
 ### 43.2 Push
 
-Push to `origin main` after each task's commit, so the remote is never more
-than one task behind local.
+The remote should never be more than one task behind local.
 
-If the environment cannot authenticate to GitHub (a sandbox without the
-user's credentials), still commit locally, then **tell the user explicitly
-that the commits are local and need pushing**, and give them the command.
-Never silently leave work unpushed and unmentioned.
+Claude's sandbox cannot authenticate to GitHub -- the credentials live on the
+developer's machine, not here -- so Claude commits and the developer pushes.
+
+**Every time there are unpushed commits, end the reply with a push block.**
+Not a mention, not "remember to push": a copy-pasteable command plus the list
+of what it will push. Never leave work committed-but-unpushed without saying
+so. The format:
+
+```
+## 推送
+
+git push origin main
+
+将推送 N 个提交：
+  <sha> <subject>
+  <sha> <subject>
+```
+
+Get the list with `git log --oneline origin/main..HEAD`. If that command
+returns nothing, everything is already pushed -- say nothing about pushing.
+
+If a push is ever possible from the sandbox, do it directly instead and just
+report that it was pushed.
 
 ### 43.3 Tags
 
