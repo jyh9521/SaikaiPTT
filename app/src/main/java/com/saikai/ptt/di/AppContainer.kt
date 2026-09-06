@@ -1,6 +1,9 @@
 package com.saikai.ptt.di
 
 import com.saikai.ptt.core.config.SaikaiConfig
+import com.saikai.ptt.core.logger.LogSink
+import com.saikai.ptt.core.logger.Logger
+import com.saikai.ptt.logging.AndroidLogSink
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -17,12 +20,23 @@ import com.saikai.ptt.core.config.SaikaiConfig
  *
  * @param isDebugBuild supplied by the caller rather than read from `BuildConfig`
  *   here, so the container stays constructible in a plain JVM test.
+ * @param logSink overridable so a JVM test can assemble the container without
+ *   `android.util.Log`, which throws outside an instrumented environment.
  */
-class AppContainer(isDebugBuild: Boolean) {
+class AppContainer(
+    isDebugBuild: Boolean,
+    logSink: LogSink = AndroidLogSink(),
+) {
 
     /**
      * Every tunable value in the app. Injected rather than read from a global so
      * tests can shorten timeouts instead of waiting them out.
      */
     val config: SaikaiConfig = SaikaiConfig.forBuild(isDebugBuild)
+
+    /**
+     * Built from the same config, so the build type decides logging in exactly
+     * one place.
+     */
+    val logger: Logger = Logger(config.logging, logSink)
 }

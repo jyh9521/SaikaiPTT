@@ -2,6 +2,7 @@ package com.saikai.ptt.di
 
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
+import com.saikai.ptt.core.logger.LogSink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,9 +14,16 @@ import org.junit.Test
  */
 class AppContainerTest {
 
+    /**
+     * Assembles the container with a sink that goes nowhere. The real one writes
+     * to `android.util.Log`, whose stubs throw in a plain JVM test.
+     */
+    private fun container(isDebugBuild: Boolean) =
+        AppContainer(isDebugBuild = isDebugBuild, logSink = LogSink.None)
+
     @Test
     fun `release builds get release logging`() {
-        val logging = AppContainer(isDebugBuild = false).config.logging
+        val logging = container(isDebugBuild = false).config.logging
 
         assertFalse(
             "A release build must not ship debug logging (PRD section 48)",
@@ -29,7 +37,7 @@ class AppContainerTest {
 
     @Test
     fun `debug builds get full logging`() {
-        val logging = AppContainer(isDebugBuild = true).config.logging
+        val logging = container(isDebugBuild = true).config.logging
         assertTrue(logging.isEnabled(LogLevel.DEBUG, LogCategory.PROTOCOL))
     }
 
@@ -37,13 +45,26 @@ class AppContainerTest {
     fun `communication timing does not depend on the build type`() {
         // Anything that differed between debug and release would mean the build
         // that was tested is not the build that ships.
-        val debug = AppContainer(isDebugBuild = true).config
-        val release = AppContainer(isDebugBuild = false).config
+        val debug = container(isDebugBuild = true).config
+        val release = container(isDebugBuild = false).config
 
         assertEquals(debug.presence, release.presence)
         assertEquals(debug.session, release.session)
         assertEquals(debug.audio, release.audio)
         assertEquals(debug.network, release.network)
         assertEquals(debug.protocol, release.protocol)
+    }
+
+    @Test
+    fun `the logger is built from the same config the container exposes`() {
+        // One source of truth for the build type. If the logger were configured
+        // separately, a release build could ship with debug logging while the
+        // config said otherwise.
+        val release = container(isDebugBuild = false)
+        assertFalse(release.logger.isEnabled(LogLevel.DEBUG, LogCategory.SERVICE))
+        assertTrue(release.logger.isEnabled(LogLevel.ERROR, LogCategory.SERVICE))
+
+        val debug = container(isDebugBuild = true)
+        assertTrue(debug.logger.isEnabled(LogLevel.DEBUG, LogCategory.PROTOCOL))
     }
 }
