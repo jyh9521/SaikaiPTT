@@ -1,0 +1,393 @@
+package com.saikai.ptt.core.config
+
+import com.saikai.ptt.core.logger.LogCategory
+import com.saikai.ptt.core.logger.LogLevel
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * Every tunable value in SaikaiPTT, in one place.
+ *
+ * `docs/01_PRD.md` section 34 and `.claude/CLAUDE.md` section 24 forbid magic
+ * numbers scattered through the code: a heartbeat interval that appears in three
+ * classes will eventually mean three different things.
+ *
+ * Two conventions carry most of the weight here:
+ *
+ * 1. Durations are [Duration], not `Int`. `heartbeatInterval = 5.seconds` cannot
+ *    be misread as five milliseconds, and no call site has to remember a unit.
+ * 2. Anything derivable is derived, never restated. Peer timeout follows from the
+ *    heartbeat interval; audio frame size follows from sample rate and frame
+ *    duration. Restating them lets one drift out of step with the other during a
+ *    later tuning pass, which is exactly the kind of bug that shows up only on a
+ *    slow device on a busy network.
+ *
+ * Every group validates its invariants in `init`. Failing at construction is far
+ * cheaper than debugging an oversized UDP packet in the field.
+ *
+ * Config is a value, not a service: tests build variants with `copy()`.
+ */
+data class SaikaiConfig(
+    val protocol: ProtocolConfig = ProtocolConfig(),
+    val network: NetworkConfig = NetworkConfig(),
+    val discovery: DiscoveryConfig = DiscoveryConfig(),
+    val presence: PresenceConfig = PresenceConfig(),
+    val session: SessionConfig = SessionConfig(),
+    val audio: AudioConfig = AudioConfig(),
+    val jitterBuffer: JitterBufferConfig = JitterBufferConfig(),
+    val rateLimit: RateLimitConfig = RateLimitConfig(),
+    val history: HistoryConfig = HistoryConfig(),
+    val logging: LoggingConfig = LoggingConfig(),
+) {
+    init {
+        // An Opus frame at the configured bitrate must fit the voice payload cap,
+        // with headroom. Raising the bitrate without raising the cap would make
+        // every frame fail validation at the receiver -- silence with no error.
+        val expectedEncodedBytes =
+            audio.opusBitrateBps * audio.frameDuration.inWholeMilliseconds / 8_000
+        require(protocol.voiceDataMaxPayloadBytes >= expectedEncodedBytes * 2) {
+            "voiceDataMaxPayloadBytes (${protocol.voiceDataMaxPayloadBytes}) leaves no " +
+                "headroom for a ${expectedEncodedBytes}-byte frame at " +
+                "${audio.opusBitrateBps} bps / ${audio.frameDuration}"
+        }
+
+        require(network.receiveBufferBytes >= protocol.maxDatagramBytes) {
+            "Receive buffer (${network.receiveBufferBytes}) must hold the largest " +
+                "datagram the protocol can produce (${protocol.maxDatagramBytes})"
+        }
+    }
+
+    companion object {
+        /**
+         * The configuration for a given build type.
+         *
+         * Only logging differs. Timing, ports and audio parameters must be
+         * identical between debug and release, otherwise the build that gets
+         * tested is not the build that ships.
+         */
+        fun forBuild(isDebugBuild: Boolean): SaikaiConfig = SaikaiConfig(
+            logging = if (isDebugBuild) LoggingConfig.debug() else LoggingConfig.release(),
+        )
+    }
+}
+
+/**
+ * Wire-format constants. Normative source: `docs/ADR/ADR-003-Wire-Format.md`.
+ *
+ * These are not tuning knobs -- changing any of them changes the protocol and
+ * requires a version bump and an ADR.
+ */
+data class ProtocolConfig(
+    val version: Int = 1,
+    /** ASCII "SKPT". Rejects other LAN traffic before any field is parsed. */
+    val magic: ByteArray = byteArrayOf(0x53, 0x4B, 0x50, 0x54),
+    val headerBytes: Int = 72,
+    val maxPayloadBytes: Int = 1024,
+    /** Voice payloads are capped far tighter than the general limit; see [maxDatagramBytes]. */
+    val voiceDataMaxPayloadBytes: Int = 400,
+    val maxUserNameBytes: Int = 64,
+    /** UI-side limit. Both apply; the stricter one wins. */
+    val maxUserNameCodePoints: Int = 24,
+) {
+    /** Largest datagram the protocol can produce. Must stay well under the 1500-byte MTU. */
+    val maxDatagramBytes: Int get() = headerBytes + maxPayloadBytes
+
+    /** Largest datagram a voice frame can produce: header + 400. */
+    val maxVoiceDatagramBytes: Int get() = headerBytes + voiceDataMaxPayloadBytes
+
+    init {
+        require(magic.size == 4) { "Magic is a fixed 4 bytes" }
+        require(voiceDataMaxPayloadBytes <= maxPayloadBytes) {
+            "Voice payload limit cannot exceed the general payload limit"
+        }
+        require(maxDatagramBytes < MTU_BYTES) {
+            "Datagrams must not fragment: $maxDatagramBytes >= $MTU_BYTES"
+        }
+        require(maxUserNameBytes >= maxUserNameCodePoints) {
+            "A code point never encodes to less than one byte"
+        }
+    }
+
+    // ByteArray gives data classes reference equality, which would make two
+    // structurally identical configs compare unequal and break test assertions.
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is ProtocolConfig &&
+            version == other.version &&
+            magic.contentEquals(other.magic) &&
+            headerBytes == other.headerBytes &&
+            maxPayloadBytes == other.maxPayloadBytes &&
+            voiceDataMaxPayloadBytes == other.voiceDataMaxPayloadBytes &&
+            maxUserNameBytes == other.maxUserNameBytes &&
+            maxUserNameCodePoints == other.maxUserNameCodePoints)
+
+    override fun hashCode(): Int {
+        var result = version
+        result = 31 * result + magic.contentHashCode()
+        result = 31 * result + headerBytes
+        result = 31 * result + maxPayloadBytes
+        result = 31 * result + voiceDataMaxPayloadBytes
+        result = 31 * result + maxUserNameBytes
+        result = 31 * result + maxUserNameCodePoints
+        return result
+    }
+
+    companion object {
+        const val MTU_BYTES: Int = 1500
+    }
+}
+
+/**
+ * Sockets and ports. Normative source: `docs/ADR/ADR-002-Transport-And-Ports.md`.
+ *
+ * Two sockets on two threads: 50 voice packets a second must not queue behind
+ * control-packet parsing and peer-table updates.
+ */
+data class NetworkConfig(
+    /**
+     * Fixed. A device that cannot bind this port cannot be discovered, so unlike
+     * the voice port it may not drift silently.
+     */
+    val controlPort: Int = 45820,
+    /** Floating; the port actually bound is advertised in discovery and heartbeat. */
+    val voicePort: Int = 45821,
+    /** Consecutive ports tried when one is already taken. */
+    val portProbeAttempts: Int = 4,
+    /** Preallocated and reused per receive thread; never allocated per packet. */
+    val receiveBufferBytes: Int = 2048,
+) {
+    init {
+        require(controlPort in 1024..65535) { "controlPort must be a non-privileged port" }
+        require(voicePort in 1024..65535) { "voicePort must be a non-privileged port" }
+        require(controlPort != voicePort) { "Control and voice must not share a port" }
+        require(portProbeAttempts >= 1) { "At least one bind attempt is required" }
+    }
+}
+
+/**
+ * Discovery timing. Normative source: `docs/ADR/ADR-001-Discovery-Strategy.md`.
+ */
+data class DiscoveryConfig(
+    /**
+     * A single announcement is lost to a single dropped broadcast, and the two
+     * devices then stay invisible to each other until the next heartbeat. Three
+     * spread-out sends make that unlikely without being a burst.
+     */
+    val announceDelays: List<Duration> = listOf(
+        Duration.ZERO,
+        300.milliseconds,
+        900.milliseconds,
+    ),
+) {
+    init {
+        require(announceDelays.isNotEmpty()) { "At least one announcement is required" }
+        require(announceDelays.zipWithNext().all { (a, b) -> a < b }) {
+            "Announcement delays must be strictly increasing"
+        }
+    }
+}
+
+/**
+ * Presence timing. Normative source: `docs/03_Protocol.md` section 13.
+ */
+data class PresenceConfig(
+    val heartbeatInterval: Duration = 5.seconds,
+    /**
+     * A peer is not declared offline for one lost packet. WiFi drops broadcasts
+     * routinely, and a peer list that flickers is worse than one that lags.
+     */
+    val missedIntervalsBeforeOffline: Int = 3,
+    val timeoutTolerance: Duration = 1.seconds,
+    val evaluationInterval: Duration = 2.seconds,
+) {
+    /**
+     * Derived, not stated: the relationship to [heartbeatInterval] is the point.
+     * Retuning the interval must not silently leave the timeout at an old value.
+     */
+    val peerTimeout: Duration
+        get() = heartbeatInterval * missedIntervalsBeforeOffline + timeoutTolerance
+
+    init {
+        require(heartbeatInterval > Duration.ZERO) { "heartbeatInterval must be positive" }
+        require(missedIntervalsBeforeOffline >= 2) {
+            "Fewer than two missed intervals makes a single lost packet look like an offline peer"
+        }
+        require(evaluationInterval < heartbeatInterval) {
+            "Timeouts must be evaluated more often than heartbeats are sent"
+        }
+    }
+}
+
+/**
+ * PTT session timing. Normative source: `docs/ADR/ADR-003-Wire-Format.md` section 6.
+ */
+data class SessionConfig(
+    val voiceStartRetry: Duration = 150.milliseconds,
+    val voiceStartMaxRetries: Int = 2,
+    val voiceStartTimeout: Duration = 500.milliseconds,
+    /**
+     * Capture starts the instant the button goes down and buffers locally until
+     * the peer accepts, so the first syllable survives the handshake. Bounded
+     * because an unbounded buffer would grow while a dead peer never answers.
+     */
+    val preRollBuffer: Duration = 500.milliseconds,
+    /** A receiver stops waiting when VOICE_DATA and VOICE_END both stop arriving. */
+    val idleTimeout: Duration = 3.seconds,
+    /** Backstop against a stuck button or a misbehaving peer holding the channel. */
+    val maxDuration: Duration = 5.minutes,
+) {
+    init {
+        require(voiceStartMaxRetries >= 0) { "Retry count cannot be negative" }
+        require(voiceStartRetry * (voiceStartMaxRetries + 1) <= voiceStartTimeout) {
+            "All retries must fit inside the request timeout, otherwise the last one " +
+                "is sent and immediately abandoned"
+        }
+        require(preRollBuffer >= voiceStartTimeout) {
+            "The pre-roll buffer must cover the whole handshake window, or audio " +
+                "captured while waiting for acceptance is discarded"
+        }
+        require(idleTimeout < maxDuration) { "idleTimeout must be shorter than maxDuration" }
+    }
+}
+
+/**
+ * Audio parameters. Normative source: `docs/ADR/ADR-004-Audio-Params.md`.
+ *
+ * Fixed by the protocol version, not negotiated: a peer that used different
+ * values would produce audio the other side cannot decode.
+ */
+data class AudioConfig(
+    val sampleRateHz: Int = 16_000,
+    val channelCount: Int = 1,
+    val frameDuration: Duration = 20.milliseconds,
+    val opusBitrateBps: Int = 20_000,
+    /** Low, on purpose: the reference device is an MTK P22. */
+    val opusComplexity: Int = 3,
+    /** In-band forward error correction absorbs isolated packet loss. */
+    val opusForwardErrorCorrection: Boolean = true,
+    /**
+     * Off. Discontinuous transmission saves bandwidth the LAN does not need,
+     * while making "silent" and "stopped sending" ambiguous in a half-duplex
+     * protocol.
+     */
+    val opusDiscontinuousTransmission: Boolean = false,
+    val bytesPerSample: Int = 2,
+) {
+    /** 320 samples at 16 kHz / 20 ms. */
+    val frameSizeSamples: Int
+        get() = (sampleRateHz * frameDuration.inWholeMicroseconds / 1_000_000L).toInt()
+
+    /** 640 bytes of PCM per frame. */
+    val frameSizeBytes: Int get() = frameSizeSamples * bytesPerSample * channelCount
+
+    /** 50 packets per second per direction. */
+    val packetsPerSecond: Int get() = (1_000L / frameDuration.inWholeMilliseconds).toInt()
+
+    init {
+        require(channelCount == 1) { "PTT is mono; stereo would double bandwidth for nothing" }
+        require(frameDuration.inWholeMilliseconds > 0) { "frameDuration must be at least 1 ms" }
+        require(1_000L % frameDuration.inWholeMilliseconds == 0L) {
+            "Frame duration must divide one second evenly"
+        }
+        require(opusComplexity in 0..10) { "Opus complexity is 0..10" }
+        require(frameSizeSamples > 0) { "Derived frame size must be positive" }
+    }
+}
+
+/**
+ * Jitter buffer depth. Normative source: `docs/ADR/ADR-004-Audio-Params.md` section 4.
+ */
+data class JitterBufferConfig(
+    /** Playback waits for this many frames so reordering has room to resolve. */
+    val startThresholdFrames: Int = 3,
+    val targetFrames: Int = 3,
+    /**
+     * Above this the buffer is trading latency for smoothness badly: a
+     * walkie-talkie that answers late feels broken even if every frame arrives.
+     */
+    val maxFrames: Int = 10,
+) {
+    fun startThreshold(audio: AudioConfig): Duration = audio.frameDuration * startThresholdFrames
+    fun maxDepth(audio: AudioConfig): Duration = audio.frameDuration * maxFrames
+
+    init {
+        require(startThresholdFrames >= 1) { "Playback needs at least one frame to start" }
+        require(targetFrames <= maxFrames) { "Target depth cannot exceed the maximum" }
+        require(startThresholdFrames <= maxFrames) { "Start threshold cannot exceed the maximum" }
+    }
+}
+
+/**
+ * Defences against a malfunctioning or hostile device on the LAN.
+ * Normative source: `docs/03_Protocol.md` section 45.
+ *
+ * The product assumes a trusted network, but "trusted" must not mean that one
+ * broken device can spin the CPU, exhaust memory or flood the log.
+ */
+data class RateLimitConfig(
+    val maxControlPacketsPerSecondPerSource: Int = 50,
+    val maxInvalidPacketsPerSecondPerSource: Int = 20,
+    /** How long a source is ignored after exceeding a limit. */
+    val silenceDuration: Duration = 5.seconds,
+    val maxPeers: Int = 64,
+    /** Per issue kind, so a packet storm cannot become a log storm. */
+    val maxLogEntriesPerSecondPerKind: Int = 1,
+) {
+    init {
+        require(maxControlPacketsPerSecondPerSource > 0) { "Rate limit must be positive" }
+        require(maxInvalidPacketsPerSecondPerSource <= maxControlPacketsPerSecondPerSource) {
+            "Invalid packets are a subset of received packets"
+        }
+        require(maxPeers > 0) { "Peer table must hold at least one peer" }
+    }
+}
+
+/** History retention and transcription. Normative source: `docs/05_DataModel.md`. */
+data class HistoryConfig(
+    val defaultRetention: Retention = Retention.SEVEN_DAYS,
+    /** Bounded: a recording that cannot be transcribed must not be retried forever. */
+    val asrMaxRetries: Int = 3,
+) {
+    init {
+        require(asrMaxRetries in 0..10) { "Unbounded ASR retries would burn battery on a bad file" }
+    }
+
+    enum class Retention(val duration: Duration?) {
+        ONE_DAY(1.days),
+        THREE_DAYS(3.days),
+        SEVEN_DAYS(7.days),
+        THIRTY_DAYS(30.days),
+
+        /** Kept until the user deletes it. */
+        FOREVER(null),
+    }
+}
+
+/** Logging thresholds. The only group that differs between build types. */
+data class LoggingConfig(
+    val minLevel: LogLevel = LogLevel.DEBUG,
+    val enabledCategories: Set<LogCategory> = LogCategory.entries.toSet(),
+    /** Guards against a per-packet log path becoming a performance problem. */
+    val maxEntriesPerSecondPerKind: Int = 1,
+) {
+    fun isEnabled(level: LogLevel, category: LogCategory): Boolean =
+        level.isAtLeast(minLevel) && category in enabledCategories
+
+    companion object {
+        fun debug(): LoggingConfig = LoggingConfig(
+            minLevel = LogLevel.DEBUG,
+            enabledCategories = LogCategory.entries.toSet(),
+        )
+
+        /**
+         * Release drops DEBUG entirely and narrows to the categories that help
+         * diagnose a field report. `docs/01_PRD.md` section 48.
+         */
+        fun release(): LoggingConfig = LoggingConfig(
+            minLevel = LogLevel.INFO,
+            enabledCategories = LogCategory.RELEASE_DEFAULT,
+        )
+    }
+}

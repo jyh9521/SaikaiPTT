@@ -52,6 +52,7 @@
         android:required="true" />
 
     <application
+        android:name=".SaikaiApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
