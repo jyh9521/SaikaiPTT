@@ -98,9 +98,8 @@ android {
         // 构建都提醒。
         disable += "OldTargetApi"
 
-        htmlReport = true
-        xmlReport = true
-        textReport = false
+        // AGP 9 起 lint 报告始终生成，htmlReport / xmlReport / textReport
+        // 三个开关已废弃，因此不再设置。
     }
 
     testOptions {
