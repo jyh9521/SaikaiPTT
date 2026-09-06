@@ -117,6 +117,10 @@ android {
 }
 
 dependencies {
+    // Business and domain logic. The dependency points app -> core and never
+    // back: core knows nothing about Android, Compose or this module.
+    implementation(project(":core"))
+
     // UI. The app is a walkie-talkie: big buttons, clear state, no decoration
     // (docs/04_UI_UX.md section 4). Nothing beyond Compose and Material 3.
     implementation(platform(libs.androidx.compose.bom))

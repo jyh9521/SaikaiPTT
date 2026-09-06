@@ -67,3 +67,6 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+# :core is a plain JVM module, so it needs the Kotlin JVM plugin explicitly.
+# The :app module does not: AGP 9 has built-in Kotlin support.
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

@@ -26,4 +26,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "SaikaiPTT"
 
+// Only two Gradle modules, by design (docs/02_Architecture.md 5.1).
+// Every other boundary is a package. A module is added only when it earns one.
 include(":app")
+include(":core")
