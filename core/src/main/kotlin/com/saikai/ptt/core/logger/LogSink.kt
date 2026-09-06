@@ -13,11 +13,14 @@ package com.saikai.ptt.core.logger
  */
 fun interface LogSink {
 
+    // No default for `throwable`: a fun interface's abstract method may not have
+    // one, and the SAM conversion is worth more here than the default. Every
+    // caller passes it explicitly anyway.
     fun write(
         level: LogLevel,
         category: LogCategory,
         message: String,
-        throwable: Throwable? = null,
+        throwable: Throwable?,
     )
 
     companion object {

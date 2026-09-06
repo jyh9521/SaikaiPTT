@@ -909,8 +909,20 @@ So the division of labour is:
 |---|---|
 | Write and edit all project files | Claude |
 | Static verification (XML well-formedness, resource and reference consistency, structure and numbering checks) | Claude |
+| **Type-check `:core`** via `tools/typecheck-core.sh` | Claude |
 | Gradle Sync, Debug build, Release build, unit tests, instrumented tests | **The developer, in Android Studio** |
 | Interpret failures and fix | Claude, from the pasted output |
+
+**Run `tools/typecheck-core.sh --with-tests` before handing any `:core` change
+back.** It drives the Kotlin compiler already sitting in the Gradle cache, needs
+no network and no Android SDK, and takes seconds. It catches unresolved
+references, wrong arities, bad overrides and type mismatches -- the errors that
+otherwise cost a full round trip through the developer. It runs the frontend
+only in practice; code generation fails for want of a JDK, which does not matter
+because every diagnostic worth catching here is a frontend one.
+
+It does not cover `:app`, which needs the Android SDK. Android-side changes are
+still verified only by a real build.
 
 Claude must therefore:
 
