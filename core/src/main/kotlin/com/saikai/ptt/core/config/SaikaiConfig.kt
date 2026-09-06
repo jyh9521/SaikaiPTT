@@ -214,8 +214,14 @@ data class PresenceConfig(
         require(missedIntervalsBeforeOffline >= 2) {
             "Fewer than two missed intervals makes a single lost packet look like an offline peer"
         }
-        require(evaluationInterval < heartbeatInterval) {
-            "Timeouts must be evaluated more often than heartbeats are sent"
+        // What actually matters is how late an offline peer is noticed, and that
+        // is bounded by the evaluation interval relative to the timeout -- not
+        // relative to the heartbeat. Comparing against the heartbeat rejected
+        // legitimate configurations: shortening the heartbeat to 1s for a test
+        // gives a 4s timeout, which a 2s sweep detects perfectly well.
+        require(evaluationInterval <= peerTimeout / 2) {
+            "An offline peer would be noticed up to $evaluationInterval after a " +
+                "$peerTimeout timeout; sweep at least twice per timeout window"
         }
     }
 }

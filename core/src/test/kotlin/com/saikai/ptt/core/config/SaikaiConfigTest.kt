@@ -94,8 +94,19 @@ class SaikaiConfigTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `evaluating timeouts less often than heartbeats arrive is rejected`() {
+    fun `sweeping for timeouts too rarely is rejected`() {
+        // A 30s sweep against a 16s timeout means a peer can appear online for
+        // 46s after it vanished.
         PresenceConfig(evaluationInterval = 30.seconds)
+    }
+
+    @Test
+    fun `shortening the heartbeat for a test is a legal configuration`() {
+        // Regression: the sweep interval used to be compared against the
+        // heartbeat interval, which rejected this outright even though a 2s
+        // sweep detects a 4s timeout twice over.
+        val fast = PresenceConfig(heartbeatInterval = 1.seconds)
+        assertEquals(4.seconds, fast.peerTimeout)
     }
 
     @Test(expected = IllegalArgumentException::class)
