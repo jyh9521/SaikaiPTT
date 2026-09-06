@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Nothing this app stores may leave the device.
+
+    docs/01_PRD.md section 54 and docs/05_DataModel.md section 44: recordings,
+    transcripts and communication history are private local data. Android's
+    cloud backup and device-to-device transfer would both copy them off the
+    handset, so every domain is excluded from both.
+
+    allowBackup="false" in the manifest covers Android 11; this file covers
+    Android 12 and above, where allowBackup alone is deprecated.
+
+    docs/08_ReleaseChecklist.md section 47 re-verifies this before release.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

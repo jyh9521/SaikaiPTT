@@ -87,6 +87,17 @@ android {
         // locales; promoting it now would block every task in between.
         warning += "MissingTranslation"
 
+        // ChromeOsAbiSupport: ABI 只保留 arm64-v8a 与 armeabi-v7a。ChromeOS 需要
+        // x86_64，但本产品依赖麦克风与局域网 UDP，不是 ChromeOS 目标场景，
+        // 为它多打一个 ABI 只会增大安装包。
+        disable += "ChromeOsAbiSupport"
+
+        // OldTargetApi: targetSdk 36 是经过评估的选择（API 37 平台在开发机上
+        // 并未安装，且本产品的约束是低端 Android 11 稳定性）。targetSdk 的复核
+        // 属于发布检查项，见 docs/08_ReleaseChecklist.md 第 3 节，不需要每次
+        // 构建都提醒。
+        disable += "OldTargetApi"
+
         htmlReport = true
         xmlReport = true
         textReport = false

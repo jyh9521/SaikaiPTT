@@ -24,14 +24,21 @@ compileSdk = "36"
 minSdk = "30"
 targetSdk = "36"
 
+# UI / Test 版本来自 Task03 的 lint 实测报告（GradleDependency 检查会报出当前可用
+# 版本），而不是猜测。Android Studio 模板自带的是较旧的值。
+#
+# Kotlin 有意停留在 2.2.10：AGP 9 内置 Kotlin 支持，编译器版本由 AGP 决定，
+# 单独把 kotlin.plugin.compose 升到 2.4.10 会与内置编译器版本错配。
+# Kotlin 升级需要连同 AGP 一起评估，属于独立变更。
+
 # UI
-composeBom = "2026.02.01"
-activityCompose = "1.8.0"
+composeBom = "2026.08.00"
+activityCompose = "1.13.0"
 
 # Test
 junit = "4.13.2"
-junitVersion = "1.1.5"
-espressoCore = "3.5.1"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
 
 # --- Removed at Task03 as unused ---------------------------------------------
 # androidx.core:core-ktx and androidx.lifecycle:lifecycle-runtime-ktx shipped in
