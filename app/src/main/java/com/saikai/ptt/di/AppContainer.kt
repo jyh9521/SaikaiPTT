@@ -8,6 +8,7 @@ import com.saikai.ptt.core.domain.SettingsRepository
 import com.saikai.ptt.core.domain.StoredDeviceIdentityProvider
 import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
+import com.saikai.ptt.locale.LocaleController
 import com.saikai.ptt.logging.AndroidLogSink
 
 /**
@@ -77,5 +78,13 @@ class AppContainer(
      */
     val localUsers: LocalUserRepository by lazy {
         SettingsLocalUserRepository(settingsRepository)
+    }
+
+    /**
+     * Interface language. Application scope because notifications and the
+     * overlay are built outside any Activity and must agree with the UI.
+     */
+    val locales: LocaleController by lazy {
+        LocaleController(settingsRepository, logger)
     }
 }

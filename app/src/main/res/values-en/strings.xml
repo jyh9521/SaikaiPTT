@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SaikaiPTT</string>
+
     <string name="placeholder_subtitle">Project initialised</string>
+    <string name="placeholder_language_label">Display language</string>
 </resources>

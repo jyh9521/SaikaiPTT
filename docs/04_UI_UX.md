@@ -1017,21 +1017,38 @@ English
 
 ## 35.1 实现机制
 
-使用 `AppCompatDelegate.setApplicationLocales()` 配合 `res/xml/locales_config.xml`。
+**不使用 AppCompat**，改用平台原生 API 分两条路径（Task10 落地）：
 
-Android 13+ 由系统托管 per-app language（系统设置中可见并可修改），13 以下由 AndroidX 兼容层处理。同一套 API 覆盖 Android 11~16。
+| Android 版本 | 机制 |
+|---|---|
+| 13+（API 33+） | `LocaleManager.applicationLocales`。系统托管，用户可在系统设置 → 应用 → 语言中查看和修改，资源解析由系统完成（含 Service 内的通知与悬浮窗） |
+| 11~12（API 30~32） | 自行包装 `Configuration`，在每个 Activity 的 `attachBaseContext` 中生效 |
 
-切换即时生效，不需要手动重建 Activity（框架内部处理）。
+修订说明：原方案为 `AppCompatDelegate.setApplicationLocales()`。放弃的理由是
+`androidx.appcompat` 会一并带入 AppCompat 主题体系，与本项目使用的平台主题冲突，
+而本产品只需要「设定语言」这一件事——为一个设置引入整套主题体系不划算
+（`.claude/CLAUDE.md` §32）。分路径实现的代价是两条代码路径，收益是零新增依赖。
 
-语言选择同时写入 DataStore（`app_language`），供通知与悬浮窗等应用外组件取值。
+切换生效方式：13+ 由平台重建 Activity；13 以下需要显式 `recreate()`，因为包装
+只在 Activity attach 时发生。
 
-## 35.2 字体
+## 35.2 三处存储必须一致
+
+- **DataStore `app_language`**：权威值，应用其余部分读它
+- **SharedPreferences 缓存**：仅为在第一个 Activity attach 之前**同步**读到语言。
+  DataStore 是异步的，而 `attachBaseContext` 不能等待
+- **平台（13+）**：让选择出现在系统设置里
+
+三者由 `LocaleController` 在同一处写入。存了没生效、或生效了没存，都是只在重启后
+才暴露的 bug。
+
+## 35.3 字体
 
 缅甸语与孟加拉语在部分低端 Android 11 ROM 上缺少系统字体或使用 Zawgyi 编码导致显示错乱。
 
 必须在低端参考设备上实测。若确认缺字，内置对应 Noto 字体子集并在这两种语言下显式指定字体族。
 
-## 35.3 资源限定符
+## 35.4 资源限定符
 
 | 语言 | 目录 |
 |---|---|

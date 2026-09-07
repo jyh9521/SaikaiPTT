@@ -15,6 +15,16 @@ enum class AppLanguage(val tag: String) {
     BENGALI("bn"),
     ;
 
+    /**
+     * The BCP-47 tag to hand to the platform, or null for [SYSTEM].
+     *
+     * [tag] doubles as the storage key, and "system" is not a language tag --
+     * keeping the two apart stops it reaching `LocaleList.forLanguageTags`,
+     * which would silently produce an empty list and look like a no-op.
+     */
+    val languageTag: String?
+        get() = if (this == SYSTEM) null else tag
+
     companion object {
         val DEFAULT: AppLanguage = JAPANESE
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Languages this build actually ships.
+
+    The product targets five (docs/01_PRD.md section 26), but only the two whose
+    resources exist are listed here. A locale named in this file is offered to
+    the user in system Settings on Android 13+, and picking one with no
+    translations shows Japanese while claiming to be Burmese. That is worse than
+    not offering it at all.
+
+    zh-CN, my and bn are added by Task35, together with their translations.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="ja" />
+    <locale android:name="en" />
+</locale-config>

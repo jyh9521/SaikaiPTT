@@ -1,10 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Default resources are Japanese: it is the product's default language
-    (docs/01_PRD.md section 26). Other locales live in values-<code>/.
-    Full five-language support is Task10 and Task35.
+    (docs/01_PRD.md section 26), so an untranslated string falls back to
+    Japanese rather than English.
+
+    Conventions:
+      - Every user-visible string lives here. Lint fails the build on
+        HardcodedText (app/build.gradle.kts).
+      - Counts use <plurals>, never string concatenation.
+      - Dates, times and numbers are formatted against the current Locale at
+        the call site, never assembled from resource fragments.
+      - Language names stay in their own language and are not translated.
 -->
 <resources>
     <string name="app_name">西海PTT</string>
+
+    <!-- Placeholder screen, replaced by the real Home in Task32. -->
     <string name="placeholder_subtitle">プロジェクトの初期化が完了しました</string>
+    <string name="placeholder_language_label">表示言語</string>
+
+    <!-- Endonyms: a language is always offered in its own script. -->
+    <string name="language_japanese" translatable="false">日本語</string>
+    <string name="language_english" translatable="false">English</string>
 </resources>

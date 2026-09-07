@@ -724,11 +724,8 @@ Japanese。
 
 ## 26.1 实现机制
 
-使用 `AppCompatDelegate.setApplicationLocales()` 配合 `res/xml/locales_config.xml`。
-
-理由：
-
-Android 13+ 由系统托管 per-app language（系统设置中可见并可修改），13 以下由 AndroidX 兼容层处理。同一套 API 覆盖 Android 11~16，无需自行管理 Configuration 或重启 Activity。
+使用平台原生 API，**不引入 AppCompat**：Android 13+ 走 `LocaleManager`，
+11~12 自行包装 `Configuration`。详见 `docs/04_UI_UX.md` §35.1。
 
 语言选择同时写入 DataStore（`app_language`），用于应用外的组件（通知、悬浮窗）取值。
 

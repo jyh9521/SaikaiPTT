@@ -118,3 +118,34 @@ class SettingsCodecTest {
         assertNull(settings.activeUser)
     }
 }
+
+class AppLanguageTest {
+
+    @Test
+    fun `every language except system has a valid BCP-47 tag`() {
+        AppLanguage.entries.filterNot { it == AppLanguage.SYSTEM }.forEach { language ->
+            assertEquals(
+                "The storage tag doubles as the platform tag",
+                language.tag,
+                language.languageTag,
+            )
+        }
+    }
+
+    @Test
+    fun `system has no language tag`() {
+        // "system" is not a language tag. Letting it reach
+        // LocaleList.forLanguageTags would produce an empty list and look like
+        // a silent no-op rather than "follow the device".
+        assertNull(AppLanguage.SYSTEM.languageTag)
+    }
+
+    @Test
+    fun `the five product languages are all present`() {
+        // docs/01_PRD.md section 26.
+        assertEquals(
+            setOf("ja", "zh-CN", "en", "my", "bn"),
+            AppLanguage.entries.mapNotNull { it.languageTag }.toSet(),
+        )
+    }
+}

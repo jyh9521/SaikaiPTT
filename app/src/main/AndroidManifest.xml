@@ -54,6 +54,7 @@
     <application
         android:name=".SaikaiApplication"
         android:allowBackup="false"
+        android:localeConfig="@xml/locales_config"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
