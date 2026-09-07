@@ -1,5 +1,6 @@
 package com.saikai.ptt.service
 
+import com.saikai.ptt.core.domain.Peer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,21 @@ class ServiceStatus {
 
     /** The step that failed the last start attempt, cleared by the next success. */
     val lastFailure: StateFlow<LifecycleFailure?> = _lastFailure.asStateFlow()
+
+    private val _peers = MutableStateFlow<List<Peer>>(emptyList())
+
+    /**
+     * The peer table, mirrored out of service scope so a screen can read it.
+     *
+     * Empty whenever the service is not running, which is the honest answer:
+     * nothing has been heard from anyone since the sockets closed. Task32 gives
+     * the UI its own view model over this.
+     */
+    val peers: StateFlow<List<Peer>> = _peers.asStateFlow()
+
+    fun publishPeers(peers: List<Peer>) {
+        _peers.value = peers
+    }
 
     fun publish(state: ServiceState) {
         _state.value = state

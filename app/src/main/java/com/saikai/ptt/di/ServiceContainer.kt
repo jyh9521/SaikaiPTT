@@ -2,6 +2,9 @@ package com.saikai.ptt.di
 
 import android.app.Service
 import com.saikai.ptt.core.domain.DeviceId
+import com.saikai.ptt.core.domain.LocalPresence
+import com.saikai.ptt.core.domain.PeerRegistry
+import com.saikai.ptt.discovery.UdpPeerDiscovery
 import com.saikai.ptt.core.protocol.PacketRateLimiter
 import com.saikai.ptt.core.protocol.PacketValidator
 import com.saikai.ptt.network.BoundPorts
@@ -12,6 +15,7 @@ import com.saikai.ptt.service.LifecycleStep
 import com.saikai.ptt.service.MulticastLockStep
 import com.saikai.ptt.service.ServiceNotifications
 import com.saikai.ptt.service.TransportStep
+import kotlinx.coroutines.flow.first
 
 /**
  * Service-scope dependencies: the objects that own a real resource.
@@ -61,6 +65,31 @@ class ServiceContainer(
         listener = router,
     )
 
+    /** The peer table. Service scope: it describes a network this device is on. */
+    val peers: PeerRegistry = PeerRegistry(
+        presence = app.config.presence,
+        limits = app.config.rateLimit,
+        logger = app.logger,
+    )
+
+    /**
+     * Known only once the voice socket is bound, and announced to peers, so
+     * nothing can be said about this device before the transport step runs.
+     */
+    @Volatile
+    var boundPorts: BoundPorts? = null
+        private set
+
+    val discovery: UdpPeerDiscovery = UdpPeerDiscovery(
+        config = app.config,
+        logger = app.logger,
+        transport = transport,
+        peers = peers,
+        router = router,
+        presence = ::snapshotPresence,
+        activeUserChanges = app.localUsers.activeUser,
+    )
+
     /**
      * Start order. Shutdown is exactly this list, reversed.
      *
@@ -71,8 +100,32 @@ class ServiceContainer(
     val steps: List<LifecycleStep> = listOf(
         ForegroundStep(service, notifications),
         MulticastLockStep(service, app.logger),
-        TransportStep(transport, app.logger, onBound),
+        TransportStep(transport, app.logger) { ports ->
+            boundPorts = ports
+            onBound(ports)
+        },
+        discovery,
     )
+
+    /**
+     * What this device can currently say about itself, or null when it cannot
+     * say anything yet.
+     *
+     * Null on a fresh install with no name chosen, and before the voice socket
+     * is bound. Announcing either as a blank or a zero would put a row in every
+     * peer list on the network that nobody can call.
+     */
+    private suspend fun snapshotPresence(): LocalPresence? {
+        val voicePort = boundPorts?.voicePort ?: return null
+        val user = app.localUsers.activeUser.first() ?: return null
+        return LocalPresence(
+            deviceId = localDeviceId,
+            userName = user.displayName,
+            voicePort = voicePort,
+            // No session machine yet (Task19); this device is never busy.
+            busy = false,
+        )
+    }
 
     /**
      * Releases what the container itself holds.

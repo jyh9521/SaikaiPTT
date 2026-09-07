@@ -10,15 +10,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -28,10 +33,12 @@ import com.saikai.ptt.BuildConfig
 import com.saikai.ptt.R
 import com.saikai.ptt.SaikaiApplication
 import com.saikai.ptt.core.domain.AppLanguage
+import com.saikai.ptt.core.domain.Peer
 import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.service.CommunicationService
 import com.saikai.ptt.service.ServiceState
 import com.saikai.ptt.ui.theme.SaikaiPttTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -63,11 +70,23 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) { container.locales.reconcile(this@MainActivity) }
 
                 val serviceState by container.serviceStatus.state.collectAsState()
+                val peers by container.serviceStatus.peers.collectAsState()
+                val activeUser by container.localUsers.activeUser.collectAsState(initial = null)
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     PlaceholderScreen(
                         language = AppLocale.cached(this@MainActivity),
                         serviceState = serviceState,
+                        peers = peers,
+                        activeUserName = activeUser?.displayName,
+                        onSetName = { name ->
+                            val current = container.localUsers.activeUser.first()
+                            if (current == null) {
+                                container.localUsers.create(name)
+                            } else {
+                                container.localUsers.rename(current.id, name)
+                            }
+                        },
                         onToggleService = {
                             if (serviceState == ServiceState.READY ||
                                 serviceState == ServiceState.STARTING
@@ -97,11 +116,15 @@ class MainActivity : ComponentActivity() {
 private fun PlaceholderScreen(
     language: AppLanguage,
     serviceState: ServiceState,
+    peers: List<Peer>,
+    activeUserName: String?,
+    onSetName: suspend (String) -> Unit,
     onToggleService: () -> Unit,
     onSelectLanguage: suspend (AppLanguage) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    var nameDraft by remember(activeUserName) { mutableStateOf(activeUserName.orEmpty()) }
 
     Column(
         modifier = modifier.fillMaxSize().padding(24.dp),
@@ -134,6 +157,25 @@ private fun PlaceholderScreen(
                 }
             }
 
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = nameDraft,
+                    onValueChange = { nameDraft = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.placeholder_name_label)) },
+                    modifier = Modifier.width(180.dp),
+                )
+                OutlinedButton(
+                    onClick = { scope.launch { onSetName(nameDraft) } },
+                    enabled = nameDraft.isNotBlank(),
+                ) {
+                    Text(stringResource(R.string.placeholder_name_set))
+                }
+            }
+
             Text(
                 text = "${stringResource(R.string.placeholder_service_label)}: $serviceState",
                 style = MaterialTheme.typography.labelMedium,
@@ -149,6 +191,17 @@ private fun PlaceholderScreen(
                     )
                 )
             }
+
+            Text(
+                text = "${stringResource(R.string.placeholder_peers_label)} (${peers.size})",
+                style = MaterialTheme.typography.labelMedium,
+            )
+            peers.forEach { peer ->
+                Text(
+                    text = "${peer.userName}  ${peer.state}  ${peer.endpoint}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
@@ -160,6 +213,9 @@ private fun PlaceholderScreenPreview() {
         PlaceholderScreen(
             language = AppLanguage.JAPANESE,
             serviceState = ServiceState.STOPPED,
+            peers = emptyList(),
+            activeUserName = null,
+            onSetName = {},
             onToggleService = {},
             onSelectLanguage = {},
         )

@@ -10,6 +10,7 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.di.ServiceContainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -49,6 +50,7 @@ class CommunicationService : Service() {
     private lateinit var notifications: ServiceNotifications
     private var container: ServiceContainer? = null
     private var lifecycle: ServiceLifecycle? = null
+    private var peerMirror: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -132,7 +134,13 @@ class CommunicationService : Service() {
         lifecycle = serviceLifecycle
 
         when (val outcome = serviceLifecycle.start()) {
-            is Outcome.Success -> Unit
+            is Outcome.Success -> {
+                // The peer table lives in service scope; the UI has to be able
+                // to read it without binding to a service that may not be there.
+                peerMirror = scope.launch {
+                    serviceContainer.peers.peers.collect(status::publishPeers)
+                }
+            }
             is Outcome.Failure -> {
                 // Everything the sequence started has already been released.
                 status.publishFailure(outcome.error)
@@ -145,10 +153,15 @@ class CommunicationService : Service() {
     }
 
     private suspend fun shutdown(): Unit = mutex.withLock {
+        peerMirror?.cancel()
+        peerMirror = null
         lifecycle?.stop()
         container?.close()
         lifecycle = null
         container = null
+        // Nothing has been heard from anyone since the sockets closed, and
+        // saying so is more honest than leaving a stale list on screen.
+        (application as? SaikaiApplication)?.container?.serviceStatus?.publishPeers(emptyList())
     }
 
     private fun appContainerOrNull() = (application as? SaikaiApplication)?.container
