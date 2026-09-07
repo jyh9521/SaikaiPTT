@@ -361,6 +361,7 @@ private suspend fun probeMicrophone(recorder: AudioRecorder, frameSizeBytes: Int
     val peak = AtomicInteger()
     val firstAt = AtomicLong()
     val lastAt = AtomicLong()
+    val silentFrames = AtomicInteger()
 
     val outcome = recorder.start { pcm, offset, length, capturedAtMillis ->
         if (frames.getAndIncrement() == 0) firstAt.set(capturedAtMillis)
@@ -377,6 +378,9 @@ private suspend fun probeMicrophone(recorder: AudioRecorder, frameSizeBytes: Int
             if (magnitude > loudest) loudest = magnitude
             index += 2
         }
+        // A frame of literal zeros is a different fault from a quiet one: it
+        // means the device handed back silence, not that the room was still.
+        if (loudest == 0) silentFrames.incrementAndGet()
         peak.updateAndGet { maxOf(it, loudest) }
     }
 
@@ -394,8 +398,8 @@ private suspend fun probeMicrophone(recorder: AudioRecorder, frameSizeBytes: Int
             // hardware's start-up. What matters is the rate once it is running.
             val spanMillis = (lastAt.get() - firstAt.get()).coerceAtLeast(0L)
             val expectedInSpan = if (count > 1) spanMillis / 20 + 1 else count.toLong()
-            "frames=$count/$expectedInSpan span=${spanMillis}ms ${frameSizeBytes}B peak=%.2f"
-                .format(level)
+            "f=$count/$expectedInSpan ${spanMillis}ms zero=${silentFrames.get()} peak=%.3f raw=%d"
+                .format(level, peak.get())
         }
     }
 }
