@@ -1,5 +1,6 @@
 package com.saikai.ptt.core.domain
 
+import com.saikai.ptt.core.common.BinaryUuid
 import java.util.UUID
 
 /**
@@ -42,8 +43,7 @@ class DeviceId private constructor(private val uuid: UUID) {
         require(offset >= 0 && offset + BYTES <= target.size) {
             "Need $BYTES bytes at offset $offset in a ${target.size}-byte buffer"
         }
-        writeLong(target, offset, uuid.mostSignificantBits)
-        writeLong(target, offset + Long.SIZE_BYTES, uuid.leastSignificantBits)
+        BinaryUuid.write(uuid, target, offset)
     }
 
     /** Allocating convenience for tests and cold paths. */
@@ -57,7 +57,7 @@ class DeviceId private constructor(private val uuid: UUID) {
 
     companion object {
         /** Length of the binary form, in bytes. */
-        const val BYTES: Int = 16
+        const val BYTES: Int = BinaryUuid.BYTES
 
         /** The all-zero id: "no target" for broadcast packets, never a real device. */
         val ZERO: DeviceId = DeviceId(UUID(0L, 0L))
@@ -92,26 +92,8 @@ class DeviceId private constructor(private val uuid: UUID) {
         /** Reads the 16-byte big-endian form, or returns null when the range is short. */
         fun fromBytes(source: ByteArray, offset: Int = 0): DeviceId? {
             if (offset < 0 || offset + BYTES > source.size) return null
-            return DeviceId(
-                UUID(
-                    readLong(source, offset),
-                    readLong(source, offset + Long.SIZE_BYTES),
-                )
-            )
+            return DeviceId(BinaryUuid.read(source, offset))
         }
 
-        private fun writeLong(target: ByteArray, offset: Int, value: Long) {
-            for (i in 0 until Long.SIZE_BYTES) {
-                target[offset + i] = (value ushr (8 * (Long.SIZE_BYTES - 1 - i))).toByte()
-            }
-        }
-
-        private fun readLong(source: ByteArray, offset: Int): Long {
-            var result = 0L
-            for (i in 0 until Long.SIZE_BYTES) {
-                result = (result shl 8) or (source[offset + i].toLong() and 0xFF)
-            }
-            return result
-        }
     }
 }

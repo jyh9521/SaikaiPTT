@@ -2,6 +2,7 @@ package com.saikai.ptt.core.config
 
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
+import com.saikai.ptt.core.protocol.WireFormat
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -78,16 +79,20 @@ data class SaikaiConfig(
  *
  * These are not tuning knobs -- changing any of them changes the protocol and
  * requires a version bump and an ADR.
+ *
+ * The values come from [WireFormat], which is what the codec itself compiles
+ * against. This class exists so the rest of the application can read them
+ * through one configuration object, not so they can differ.
  */
 data class ProtocolConfig(
-    val version: Int = 1,
+    val version: Int = WireFormat.PROTOCOL_VERSION,
     /** ASCII "SKPT". Rejects other LAN traffic before any field is parsed. */
-    val magic: ByteArray = byteArrayOf(0x53, 0x4B, 0x50, 0x54),
-    val headerBytes: Int = 72,
-    val maxPayloadBytes: Int = 1024,
+    val magic: ByteArray = WireFormat.magic(),
+    val headerBytes: Int = WireFormat.HEADER_BYTES,
+    val maxPayloadBytes: Int = WireFormat.MAX_PAYLOAD_BYTES,
     /** Voice payloads are capped far tighter than the general limit; see [maxDatagramBytes]. */
-    val voiceDataMaxPayloadBytes: Int = 400,
-    val maxUserNameBytes: Int = 64,
+    val voiceDataMaxPayloadBytes: Int = WireFormat.MAX_VOICE_PAYLOAD_BYTES,
+    val maxUserNameBytes: Int = WireFormat.MAX_USER_NAME_BYTES,
     /** UI-side limit. Both apply; the stricter one wins. */
     val maxUserNameCodePoints: Int = 24,
 ) {

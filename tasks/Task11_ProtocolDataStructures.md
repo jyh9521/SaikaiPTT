@@ -47,7 +47,7 @@ After implementation:
 
 - 72 字节大端头部：Magic `SKPT` / ProtocolVersion / PacketType / Flags / PayloadLength / Reserved / SenderDeviceId / TargetDeviceId / SessionId / SequenceNumber / Timestamp
 - Device ID 与 Session ID 为 **16 字节二进制 UUID**
-- PacketType 枚举，含 v1 实现的 10 种与 4 种保留值
+- PacketType 枚举，含 v1 实现的 11 种与 4 种保留值
 - 各类型的 Payload 编解码（DISCOVERY 系列 / VOICE_START / VOICE_ACCEPT / VOICE_DATA / VOICE_END / BUSY / SESSION_TERMINATE / PING / PONG）
 - Sequence 规则（VOICE_START = 0，VOICE_DATA 从 1，VOICE_END = 最后一帧 + 1）
 - 回绕安全比较 `isNewer(a, b)`
