@@ -80,7 +80,7 @@ class PcmConversionTest {
         val samples = ShortArray(2)
         assertEquals(1, PcmConversion.bytesToShorts(byteArrayOf(0x02, 0x01, 0x03), 0, 3, samples, 0))
         assertEquals(0x0102.toShort(), samples[0])
-        assertEquals(0, samples[1])
+        assertEquals(0.toShort(), samples[1])
     }
 
     @Test
