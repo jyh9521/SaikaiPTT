@@ -25,6 +25,35 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
+
+        externalNativeBuild {
+            cmake {
+                arguments += listOf(
+                    // Passed in rather than derived inside CMakeLists, so the
+                    // build file does not have to count "../" levels up out of
+                    // src/main/cpp and get it wrong when the layout changes.
+                    // invariantSeparatorsPath because CMake wants forward
+                    // slashes even on Windows.
+                    "-DOPUS_SOURCE_DIR=" +
+                        rootProject.layout.projectDirectory.dir("third_party/opus")
+                            .asFile.invariantSeparatorsPath,
+                    // The codec is C. Without this AGP would package
+                    // libc++_shared.so as well -- a second shared object whose
+                    // 16 KB alignment is somebody else's problem to guarantee
+                    // (docs/ADR/ADR-007).
+                    "-DANDROID_STL=none",
+                )
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            // libopus requires 3.16; this is the version the SDK ships and
+            // AGP will install on demand.
+            version = "3.22.1"
+        }
     }
 
     buildTypes {

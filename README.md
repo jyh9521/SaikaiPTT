@@ -12,7 +12,7 @@ Professional Offline LAN Push-To-Talk for Android.
 - 可选的离线日语字幕
 - 五种界面语言：日本語 / 简体中文 / English / မြန်မာ / বাংলা
 
-状态：**文档与架构决策已完成，实现尚未开始。**
+状态：**实现进行中。** 协议、发现、在线状态、前台服务、网络恢复、会话状态机与音频采集/播放/编解码已完成；语音收发管线、UI 与历史记录在建。
 
 ## 文档
 
@@ -46,6 +46,17 @@ tasks/                       具体实现任务
 应用产生的网络流量只有两类：局域网内的对讲协议包，以及用户主动开启字幕功能时的一次性模型下载。
 
 ## 构建
+
+### 首次 clone 之后
+
+```bash
+git submodule update --init --recursive
+```
+
+libopus 以 git submodule 引入并锁定在 v1.6.1（见 `docs/ADR/ADR-007`）。忘了执行的话，
+CMake 会在配置阶段直接失败并打印这条命令。
+
+还需要在 SDK Manager 里安装 **NDK**（建议 r28 及以上）。CMake 由 AGP 按需下载。
 
 ### 工具链
 
@@ -105,13 +116,22 @@ Task03 移除了模板自带但零引用的 `androidx.core:core-ktx` 与 `androi
 | ProGuard 规则 | — | `proguard-android-optimize.txt` + `app/proguard-rules.pro` |
 | 调试工具依赖 | 有 | 无 |
 
-### 原生库约束
+### 原生库
 
-Task23（Opus）与 Task41（Vosk）会引入 `.so`。约束：
+APK 里**只有一个** `.so`：`libsaikaiopus.so`。libopus 编成静态库链接进它，`ANDROID_STL=none`
+避免额外打包 `libc++_shared.so`。
+
+这不是体积优化，是 **16 KB page size 对齐**（Android 15+ 要求，Google Play 自 2027-02-01
+起强制）的策略本身：对齐要求作用于 APK 里的每一个共享库，而我们能控制链接参数的只有
+自己链接的那些。详见 `docs/ADR/ADR-007`。
 
 - ABI 限定 `arm64-v8a` + `armeabi-v7a`
-- `packaging.jniLibs.useLegacyPackaging = false`，使原生库在 APK 中不压缩且按页对齐
-- **必须 16 KB page size 对齐**（Android 15+ 要求），发布前逐一验证，见 `docs/08_ReleaseChecklist.md` §6.2
+- `packaging.jniLibs.useLegacyPackaging = false`
+- 链接参数显式带 `-Wl,-z,max-page-size=16384`（NDK r28+ 默认如此，写出来是为了 r27 也对，
+  并且让这项要求出现在负责满足它的那个文件里）
+- 发布前逐一验证对齐，见 `docs/08_ReleaseChecklist.md` §6.2
+
+Task41（Vosk）会引入第二个原生依赖，届时同样按 ADR-007 的原则处理。
 
 ### 构建命令
 
@@ -122,6 +142,10 @@ gradlew testDebugUnitTest    # JVM 单元测试
 gradlew lintDebug            # 静态检查
 gradlew connectedDebugAndroidTest   # 仪器测试，需要连接设备
 ```
+
+连接了多台设备时 `connectedDebugAndroidTest` 会对每一台都跑一遍；只想跑其中一台就先
+`adb devices` 拿到序列号，再用 `-Pandroid.testInstrumentationRunnerArguments` 或直接
+断开另一台。
 
 ## 开发
 

@@ -18,3 +18,4 @@
 | ADR-004 | 音频参数与 AudioFocus 策略 | Accepted | Task05, Task20-24 |
 | ADR-005 | 前台服务、Android 版本兼容与电源锁 | Accepted | Task02, Task15, Task30 |
 | ADR-006 | 离线日语 ASR 引擎与模型分发 | Accepted | Task02, Task03, Task41 |
+| ADR-007 | Opus 编解码库选型与集成 | Accepted | Task22, Task23, Task26 |

@@ -301,6 +301,17 @@ data class AudioConfig(
      * protocol.
      */
     val opusDiscontinuousTransmission: Boolean = false,
+    /**
+     * The packet loss the encoder should protect against, as a percentage.
+     *
+     * Not decoration: libopus only spends bits on the in-band redundant copy
+     * when it believes packets are being lost, so with this at zero the FEC
+     * switch above is on and emits nothing whatsoever. Ten percent is generous
+     * for a quiet LAN and costs a few hundred bits a second at 20 kbps, which is
+     * the right trade for the environment this product runs in -- a warehouse
+     * where the access point is two walls away.
+     */
+    val opusExpectedPacketLossPercent: Int = 10,
     val bytesPerSample: Int = 2,
     /**
      * Capture inputs to try, in order (`docs/ADR/ADR-004` section 2).
@@ -347,6 +358,13 @@ data class AudioConfig(
             "Frame duration must divide one second evenly"
         }
         require(opusComplexity in 0..10) { "Opus complexity is 0..10" }
+        require(opusExpectedPacketLossPercent in 0..100) {
+            "Expected packet loss is a percentage"
+        }
+        require(!opusForwardErrorCorrection || opusExpectedPacketLossPercent > 0) {
+            "In-band FEC with an expected loss of zero emits no redundancy at all; " +
+                "either raise the expectation or turn FEC off and say so"
+        }
         require(frameSizeSamples > 0) { "Derived frame size must be positive" }
         require(captureSources.isNotEmpty()) { "At least one capture source must be allowed" }
         require(captureBufferFrames >= 2) {
