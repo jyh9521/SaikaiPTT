@@ -2,6 +2,8 @@ package com.saikai.ptt.di
 
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.DeviceIdentityProvider
+import com.saikai.ptt.core.domain.LocalUserRepository
+import com.saikai.ptt.core.domain.SettingsLocalUserRepository
 import com.saikai.ptt.core.domain.SettingsRepository
 import com.saikai.ptt.core.domain.StoredDeviceIdentityProvider
 import com.saikai.ptt.core.logger.LogSink
@@ -65,5 +67,15 @@ class AppContainer(
      */
     val deviceIdentity: DeviceIdentityProvider by lazy {
         StoredDeviceIdentityProvider(settingsRepository, logger)
+    }
+
+    /**
+     * The names stored on this device and which one is in use.
+     *
+     * The active name is transmitted with every PTT session, so the whole app
+     * must agree on it -- hence one instance, not one per screen.
+     */
+    val localUsers: LocalUserRepository by lazy {
+        SettingsLocalUserRepository(settingsRepository)
     }
 }
