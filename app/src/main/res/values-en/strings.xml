@@ -7,6 +7,7 @@
     <string name="placeholder_service_label">Communication service</string>
     <string name="placeholder_name_label">Name</string>
     <string name="placeholder_name_set">Set</string>
+    <string name="placeholder_mic_test">Mic</string>
     <string name="placeholder_peers_label">Devices</string>
     <string name="placeholder_service_start">Start</string>
     <string name="placeholder_service_stop">Stop</string>

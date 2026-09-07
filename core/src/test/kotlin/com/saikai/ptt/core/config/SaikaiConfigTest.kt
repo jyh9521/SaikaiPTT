@@ -4,6 +4,7 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
@@ -204,5 +205,45 @@ class SaikaiConfigTest {
         val fast = config.copy(presence = config.presence.copy(heartbeatInterval = 1.seconds))
         assertEquals(1.seconds, fast.presence.heartbeatInterval)
         assertEquals("The original is untouched", 5.seconds, config.presence.heartbeatInterval)
+    }
+
+    // --- Capture buffer -------------------------------------------------------
+
+    @Test
+    fun `the capture buffer never falls below four frames`() {
+        val audio = AudioConfig()
+
+        // Some devices report a minimum of a single frame, which overruns the
+        // moment the reading thread is descheduled.
+        assertEquals(audio.frameSizeBytes * 4, audio.captureBufferBytes(audio.frameSizeBytes))
+        assertEquals(audio.frameSizeBytes * 4, audio.captureBufferBytes(1))
+    }
+
+    @Test
+    fun `a larger platform minimum wins`() {
+        val audio = AudioConfig()
+        val generous = audio.frameSizeBytes * 10
+
+        assertEquals(generous, audio.captureBufferBytes(generous))
+    }
+
+    @Test
+    fun `capture must have at least one source and real slack`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioConfig(captureSources = emptyList())
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioConfig(captureBufferFrames = 1)
+        }
+    }
+
+    @Test
+    fun `the voice pipeline is preferred over the raw microphone`() {
+        // ADR-004 section 2: the platform's echo cancellation and noise
+        // suppression are what make speech usable in a warehouse.
+        assertEquals(
+            listOf(AudioCaptureSource.VOICE_COMMUNICATION, AudioCaptureSource.MIC),
+            AudioConfig().captureSources,
+        )
     }
 }

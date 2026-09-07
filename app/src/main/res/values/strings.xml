@@ -23,6 +23,7 @@
     <string name="placeholder_service_label">通信サービス</string>
     <string name="placeholder_name_label">名前</string>
     <string name="placeholder_name_set">設定</string>
+    <string name="placeholder_mic_test">マイク</string>
     <string name="placeholder_peers_label">端末</string>
     <string name="placeholder_service_start">開始</string>
     <string name="placeholder_service_stop">停止</string>

@@ -1,10 +1,14 @@
 package com.saikai.ptt.ui
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,20 +30,27 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.saikai.ptt.BuildConfig
 import com.saikai.ptt.R
 import com.saikai.ptt.SaikaiApplication
+import com.saikai.ptt.audio.AndroidAudioRecorder
+import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.domain.AppLanguage
+import com.saikai.ptt.core.domain.AudioRecorder
 import com.saikai.ptt.core.domain.Peer
 import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.service.CommunicationService
 import com.saikai.ptt.service.ServiceState
 import com.saikai.ptt.ui.theme.SaikaiPttTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.abs
 
 /**
  * Placeholder entry point.
@@ -64,6 +75,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as SaikaiApplication).container
+        // Debug affordance, removed with the placeholder screen in Task32. It is
+        // the only way to check ADR-004's capture path on a real microphone,
+        // which is what Task20 is accepted on.
+        val recorder = AndroidAudioRecorder(this, container.config, container.logger)
 
         setContent {
             SaikaiPttTheme {
@@ -86,6 +101,9 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 container.localUsers.rename(current.id, name)
                             }
+                        },
+                        onProbeMicrophone = {
+                            probeMicrophone(recorder, container.config.audio.frameSizeBytes)
                         },
                         onToggleService = {
                             if (serviceState == ServiceState.READY ||
@@ -118,6 +136,7 @@ private fun PlaceholderScreen(
     serviceState: ServiceState,
     peers: List<Peer>,
     activeUserName: String?,
+    onProbeMicrophone: suspend () -> String,
     onSetName: suspend (String) -> Unit,
     onToggleService: () -> Unit,
     onSelectLanguage: suspend (AppLanguage) -> Unit,
@@ -192,6 +211,8 @@ private fun PlaceholderScreen(
                 )
             }
 
+            MicrophoneProbe(onProbe = onProbeMicrophone)
+
             Text(
                 text = "${stringResource(R.string.placeholder_peers_label)} (${peers.size})",
                 style = MaterialTheme.typography.labelMedium,
@@ -206,6 +227,87 @@ private fun PlaceholderScreen(
     }
 }
 
+/**
+ * Records for two seconds and reports what arrived.
+ *
+ * Debug only. Task20 is accepted on "captures reliably on a real device", and a
+ * frame count against the expected hundred, plus a peak level that moves when
+ * someone speaks, is the smallest thing that can actually show it.
+ */
+@Composable
+private fun MicrophoneProbe(onProbe: suspend () -> String) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var result by remember { mutableStateOf("") }
+
+    val request = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) scope.launch { result = onProbe() } else result = "denied"
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(onClick = {
+            val granted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                result = "..."
+                scope.launch { result = onProbe() }
+            } else {
+                request.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }) {
+            Text(stringResource(R.string.placeholder_mic_test))
+        }
+        Text(text = result, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+/**
+ * Two seconds of capture, counted and measured.
+ *
+ * The peak is computed on the capture thread, from the reused buffer, which is
+ * also a live check of that contract: reading it after the callback returned
+ * would give the next frame's audio.
+ */
+private suspend fun probeMicrophone(recorder: AudioRecorder, frameSizeBytes: Int): String {
+    val frames = AtomicInteger()
+    val peak = AtomicInteger()
+
+    val outcome = recorder.start { pcm, offset, length, _ ->
+        frames.incrementAndGet()
+        var loudest = 0
+        var index = offset
+        val end = offset + length - 1
+        while (index < end) {
+            // Little-endian 16-bit PCM.
+            val sample = (((pcm[index + 1].toInt() shl 8) or (pcm[index].toInt() and 0xFF))
+                .toShort()).toInt()
+            val magnitude = if (sample == Short.MIN_VALUE.toInt()) Short.MAX_VALUE.toInt()
+            else abs(sample)
+            if (magnitude > loudest) loudest = magnitude
+            index += 2
+        }
+        peak.updateAndGet { maxOf(it, loudest) }
+    }
+
+    return when (outcome) {
+        is Outcome.Failure -> "failed: ${outcome.error}"
+        is Outcome.Success -> {
+            delay(PROBE_MILLIS)
+            recorder.stop()
+            val expected = PROBE_MILLIS / 20
+            val level = peak.get().toFloat() / Short.MAX_VALUE
+            "frames=${frames.get()}/$expected  ${frameSizeBytes}B  peak=%.2f".format(level)
+        }
+    }
+}
+
+private const val PROBE_MILLIS = 2_000L
+
 @Preview(showBackground = true)
 @Composable
 private fun PlaceholderScreenPreview() {
@@ -215,6 +317,7 @@ private fun PlaceholderScreenPreview() {
             serviceState = ServiceState.STOPPED,
             peers = emptyList(),
             activeUserName = null,
+            onProbeMicrophone = { "" },
             onSetName = {},
             onToggleService = {},
             onSelectLanguage = {},

@@ -268,6 +268,24 @@ data class SessionConfig(
  * Fixed by the protocol version, not negotiated: a peer that used different
  * values would produce audio the other side cannot decode.
  */
+/**
+ * Which microphone input to ask the platform for.
+ *
+ * Named here rather than as a platform constant so that `core` stays free of
+ * Android types and the preference can be expressed as configuration.
+ */
+enum class AudioCaptureSource {
+    /**
+     * The platform's voice pipeline: acoustic echo cancellation, noise
+     * suppression and automatic gain, which is what makes speech intelligible in
+     * a warehouse or a factory.
+     */
+    VOICE_COMMUNICATION,
+
+    /** The raw microphone. Some devices and ROMs will not open the first. */
+    MIC,
+}
+
 data class AudioConfig(
     val sampleRateHz: Int = 16_000,
     val channelCount: Int = 1,
@@ -284,6 +302,24 @@ data class AudioConfig(
      */
     val opusDiscontinuousTransmission: Boolean = false,
     val bytesPerSample: Int = 2,
+    /**
+     * Capture inputs to try, in order (`docs/ADR/ADR-004` section 2).
+     *
+     * A list rather than a preference plus a fallback, because that is what it
+     * is, and because a device that refuses both should fail with one clear
+     * error rather than through two nested branches.
+     */
+    val captureSources: List<AudioCaptureSource> = listOf(
+        AudioCaptureSource.VOICE_COMMUNICATION,
+        AudioCaptureSource.MIC,
+    ),
+    /**
+     * Multiple of the frame size the capture buffer must reach, on top of the
+     * platform minimum. Four frames is 80 ms of slack: enough that a scheduling
+     * hiccup on a low-end device does not overrun the buffer, short enough that
+     * the latency it can hide stays inside the end-to-end budget.
+     */
+    val captureBufferFrames: Int = 4,
 ) {
     /** 320 samples at 16 kHz / 20 ms. */
     val frameSizeSamples: Int
@@ -303,7 +339,21 @@ data class AudioConfig(
         }
         require(opusComplexity in 0..10) { "Opus complexity is 0..10" }
         require(frameSizeSamples > 0) { "Derived frame size must be positive" }
+        require(captureSources.isNotEmpty()) { "At least one capture source must be allowed" }
+        require(captureBufferFrames >= 2) {
+            "A capture buffer of one frame leaves no slack for a late reader"
+        }
     }
+
+    /**
+     * The capture buffer to request: the platform minimum, or four frames,
+     * whichever is larger (`docs/ADR/ADR-004` section 2).
+     *
+     * The platform minimum is a floor, not a recommendation -- on some devices
+     * it is a single frame, which overruns the moment the reader is descheduled.
+     */
+    fun captureBufferBytes(platformMinimumBytes: Int): Int =
+        maxOf(platformMinimumBytes, captureBufferFrames * frameSizeBytes)
 }
 
 /**
