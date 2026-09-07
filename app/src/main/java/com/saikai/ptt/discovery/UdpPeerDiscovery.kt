@@ -2,7 +2,6 @@ package com.saikai.ptt.discovery
 
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.AnnounceReason
-import com.saikai.ptt.core.domain.DeviceId
 import com.saikai.ptt.core.domain.LocalPresence
 import com.saikai.ptt.core.domain.PeerDiscovery
 import com.saikai.ptt.core.domain.PeerEndpoint
@@ -13,9 +12,9 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogFormat
 import com.saikai.ptt.core.logger.LogLevel
 import com.saikai.ptt.core.logger.Logger
-import com.saikai.ptt.core.protocol.Packet
 import com.saikai.ptt.core.protocol.PacketType
 import com.saikai.ptt.core.protocol.PeerState
+import com.saikai.ptt.core.protocol.PresenceAnnouncement
 import com.saikai.ptt.core.protocol.PresencePayload
 import com.saikai.ptt.core.protocol.WireFormat
 import com.saikai.ptt.network.InboundPacket
@@ -114,7 +113,7 @@ class UdpPeerDiscovery(
     }
 
     override suspend fun announce(reason: AnnounceReason) {
-        val snapshot = presence()?.takeIf { announceable(it) }
+        val snapshot = presence()?.takeIf(PresenceAnnouncement::canAnnounce)
         cached = snapshot
         if (snapshot == null) {
             logger.d(LogCategory.DISCOVERY) {
@@ -194,20 +193,21 @@ class UdpPeerDiscovery(
             return
         }
 
-        val length = encode(
+        val length = PresenceAnnouncement.encode(
             type = PacketType.DISCOVERY_RESPONSE,
-            snapshot = snapshot,
-            target = inbound.packet.header.senderDeviceId,
+            presence = snapshot,
+            timestampMillis = clock(),
             into = replyBuffer,
+            target = inbound.packet.header.senderDeviceId,
         )
         transport.send(replyBuffer, length, target, inbound.sourcePort, TransportChannel.CONTROL)
     }
 
     private fun broadcast(snapshot: LocalPresence, reason: AnnounceReason, attempt: Int) {
-        val length = encode(
+        val length = PresenceAnnouncement.encode(
             type = PacketType.DISCOVERY,
-            snapshot = snapshot,
-            target = DeviceId.ZERO,
+            presence = snapshot,
+            timestampMillis = clock(),
             into = announceBuffer,
         )
         val targets = broadcastAddresses()
@@ -226,37 +226,4 @@ class UdpPeerDiscovery(
         }
     }
 
-    /**
-     * Whether this device has something it can legally put on the wire.
-     *
-     * Checked here rather than trusted from the caller because the encoder
-     * cannot be forgiving: an empty or over-long name fails the payload's own
-     * requirement, and that would take out the announcement coroutine rather
-     * than skipping one broadcast. Silence is the right answer for a device that
-     * has no name yet.
-     */
-    private fun announceable(snapshot: LocalPresence): Boolean {
-        if (snapshot.deviceId.isZero) return false
-        if (snapshot.voicePort !in 1..0xFFFF) return false
-        val name = snapshot.userName
-        if (name.isBlank()) return false
-        return name.toByteArray(Charsets.UTF_8).size <= WireFormat.MAX_USER_NAME_BYTES
-    }
-
-    private fun encode(
-        type: PacketType,
-        snapshot: LocalPresence,
-        target: DeviceId,
-        into: ByteArray,
-    ): Int = Packet.of(
-        type = type,
-        senderDeviceId = snapshot.deviceId,
-        payload = PresencePayload(
-            peerState = if (snapshot.busy) PeerState.BUSY else PeerState.IDLE,
-            voicePort = snapshot.voicePort,
-            userName = snapshot.userName,
-        ),
-        timestampMillis = clock(),
-        targetDeviceId = target,
-    ).encodeTo(into)
 }

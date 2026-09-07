@@ -5,6 +5,7 @@ import com.saikai.ptt.core.domain.DeviceId
 import com.saikai.ptt.core.domain.LocalPresence
 import com.saikai.ptt.core.domain.PeerRegistry
 import com.saikai.ptt.discovery.UdpPeerDiscovery
+import com.saikai.ptt.presence.UdpPresenceAnnouncer
 import com.saikai.ptt.core.protocol.PacketRateLimiter
 import com.saikai.ptt.core.protocol.PacketValidator
 import com.saikai.ptt.network.BoundPorts
@@ -15,6 +16,9 @@ import com.saikai.ptt.service.LifecycleStep
 import com.saikai.ptt.service.MulticastLockStep
 import com.saikai.ptt.service.ServiceNotifications
 import com.saikai.ptt.service.TransportStep
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 
 /**
@@ -80,6 +84,22 @@ class ServiceContainer(
     var boundPorts: BoundPorts? = null
         private set
 
+    private val _busy = MutableStateFlow(false)
+
+    /**
+     * Whether this device is in a voice session, either direction.
+     *
+     * The only way a third device learns that someone is in a call
+     * (`docs/03_Protocol.md` section 12.2), so it is announced rather than kept
+     * private. Written by the session machine in Task19; false until then,
+     * which is exactly true today.
+     */
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    fun setBusy(busy: Boolean) {
+        _busy.value = busy
+    }
+
     val discovery: UdpPeerDiscovery = UdpPeerDiscovery(
         config = app.config,
         logger = app.logger,
@@ -88,6 +108,16 @@ class ServiceContainer(
         router = router,
         presence = ::snapshotPresence,
         activeUserChanges = app.localUsers.activeUser,
+    )
+
+    val presence: UdpPresenceAnnouncer = UdpPresenceAnnouncer(
+        config = app.config,
+        logger = app.logger,
+        transport = transport,
+        peers = peers,
+        router = router,
+        presence = ::snapshotPresence,
+        busy = busy,
     )
 
     /**
@@ -105,6 +135,7 @@ class ServiceContainer(
             onBound(ports)
         },
         discovery,
+        presence,
     )
 
     /**
@@ -122,8 +153,7 @@ class ServiceContainer(
             deviceId = localDeviceId,
             userName = user.displayName,
             voicePort = voicePort,
-            // No session machine yet (Task19); this device is never busy.
-            busy = false,
+            busy = _busy.value,
         )
     }
 
