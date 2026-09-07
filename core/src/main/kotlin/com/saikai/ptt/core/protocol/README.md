@@ -25,6 +25,33 @@ Packet 编解码与校验，严格按 `docs/ADR/ADR-003-Wire-Format.md` 实现�
 - **编码 `require`，解码返回 null**。编码的输入来自本机已校验的状态，越界是 bug；解码的输入来自局域网上任意一台设备，越界是常态，必须丢弃而不是抛异常。
 - **缓冲区由调用方持有**。`WireFormat.newDatagramBuffer()` 每线程分配一次，收发路径每包零分配；`VoiceDataPayload` 是接收缓冲区上的视图，跨越 `receive()` 需要 `copyFrame()`。
 
-## 待实现（Task12）
+## 已实现（Task12）
 
-`PacketValidator`：ADR-003 §8 的 12 步有序校验、本机回环过滤、目标匹配、会话与发送方匹配、非法包速率统计与限频日志。它按顺序调用本包已有的原语（`WireFormat.hasMagic` / `PacketHeader.read` / `PacketCodec.decodePayload`），因此每一步失败都能单独计数——这正是 `PacketCodec.decode` 只做结构性检查、不做策略判断的原因。
+| 文件 | 职责 |
+|---|---|
+| `RejectionReason.kt` | 12 步各自的失败原因，带 `countsAsInvalid` / `isLoggable` 分类 |
+| `ProtocolStats.kt` | 无锁计数：接受数 + 每种原因的丢弃数 |
+| `ReceivingSession.kt` | 当前接收会话的只读快照（第 11 步要用） |
+| `PacketValidator.kt` | ADR-003 §8 的 12 步有序校验 |
+| `PacketRateLimiter.kt` | §45 的每来源速率限制与静默期 |
+
+两个分类不是「非法包」，这是本任务最容易做错的地方：
+
+- **`OWN_BROADCAST_ECHO`**：本机每个广播都会原样回到自己。把它算进非法包速率，设备会把自己静默掉。
+- **`FOREIGN_SESSION`**：强插或正常挂断后，对端还有帧在路上。§45 明确要求静默丢弃，且语音包本来就不做速率限制。
+
+两者都不计数、不记日志。其余 12 种都计数并按 kind 限频记 DEBUG 日志（`PROTOCOL` 分类，Release 不开）；只有「某来源非法包超限」这一条记 WARN 且放在 `SERVICE` 分类——§45 点名要这条，而它最有价值的场合恰恰是 Release。
+
+### 接收管线怎么串（Task14 用）
+
+```kotlin
+if (!rateLimiter.admit(sourceKey)) return          // 静默中的来源，零成本
+val outcome = validator.validate(buffer, 0, length)
+rateLimiter.record(sourceKey, outcome)             // 只有真正的故障才计数
+when (outcome) {
+    is Outcome.Success -> dispatch(outcome.value)
+    is Outcome.Failure -> Unit                     // 已计数、已限频记录
+}
+```
+
+语音 socket 不调 `admit`：语音速率由第 11 步的会话校验天然约束。
