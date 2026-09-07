@@ -57,7 +57,8 @@ if [ "${1:-}" = "--with-tests" ]; then
     exit 2
   fi
   SOURCES+=("core/src/test/kotlin")
-  TARGET_CP="$TARGET_CP:$JUNIT${HAMCREST:+:$HAMCREST}"
+  COROUTINES_TEST=$(jar org.jetbrains.kotlinx/kotlinx-coroutines-test-jvm "*.jar")
+  TARGET_CP="$TARGET_CP:$JUNIT${HAMCREST:+:$HAMCREST}${COROUTINES_TEST:+:$COROUTINES_TEST}"
 fi
 
 OUT_DIR=$(mktemp -d)

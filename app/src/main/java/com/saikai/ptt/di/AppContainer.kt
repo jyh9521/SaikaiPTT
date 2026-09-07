@@ -1,7 +1,9 @@
 package com.saikai.ptt.di
 
 import com.saikai.ptt.core.config.SaikaiConfig
+import com.saikai.ptt.core.domain.DeviceIdentityProvider
 import com.saikai.ptt.core.domain.SettingsRepository
+import com.saikai.ptt.core.domain.StoredDeviceIdentityProvider
 import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.logging.AndroidLogSink
@@ -53,4 +55,15 @@ class AppContainer(
      * store until something actually reads a setting.
      */
     val settingsRepository: SettingsRepository by lazy { settingsRepositoryFactory(logger) }
+
+    /**
+     * This installation's permanent identity, generated on first use.
+     *
+     * Application scope because it must be the same value everywhere: the peer
+     * table, every outgoing packet header and every history record key off it,
+     * and two instances could disagree during the first launch that creates it.
+     */
+    val deviceIdentity: DeviceIdentityProvider by lazy {
+        StoredDeviceIdentityProvider(settingsRepository, logger)
+    }
 }

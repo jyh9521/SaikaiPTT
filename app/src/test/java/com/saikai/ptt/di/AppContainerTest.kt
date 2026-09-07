@@ -6,6 +6,7 @@ import com.saikai.ptt.core.domain.AppSettings
 import com.saikai.ptt.core.domain.SettingsRepository
 import com.saikai.ptt.core.logger.LogSink
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -71,6 +72,19 @@ class AppContainerTest {
         assertEquals(debug.audio, release.audio)
         assertEquals(debug.network, release.network)
         assertEquals(debug.protocol, release.protocol)
+    }
+
+    @Test
+    fun `device identity is generated once and shared`() = runTest {
+        // Every outgoing packet header and every history record keys off this
+        // value, so two callers must never see different ids.
+        val container = container(isDebugBuild = true)
+
+        val first = container.deviceIdentity.deviceId()
+        val second = container.deviceIdentity.deviceId()
+
+        assertEquals(first, second)
+        assertTrue("Must be a random UUID: $first", first.isVersion4)
     }
 
     @Test
