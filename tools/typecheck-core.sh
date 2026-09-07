@@ -16,8 +16,9 @@
 # This is a fast pre-check, not a substitute for `gradlew :core:test`.
 #
 # Usage:
-#   tools/typecheck-core.sh              # main sources
-#   tools/typecheck-core.sh --with-tests # main + test sources
+#   tools/typecheck-core.sh                    # main sources
+#   tools/typecheck-core.sh --with-tests       # main + test sources
+#   tools/typecheck-core.sh --with-app-network # main + app.network (plain java.net)
 set -uo pipefail
 
 KOTLIN_VERSION="2.2.10"
@@ -48,6 +49,13 @@ fi
 
 SOURCES=("core/src/main/kotlin")
 TARGET_CP="$STDLIB:$COROUTINES"
+
+# app.network is the one package under :app that touches no Android API at all
+# (ADR-002 keeps the transport on plain java.net so it can be tested off-device),
+# so it can be checked here with everything else.
+if [ "${1:-}" = "--with-app-network" ]; then
+  SOURCES+=("app/src/main/java/com/saikai/ptt/network")
+fi
 
 if [ "${1:-}" = "--with-tests" ]; then
   JUNIT=$(jar junit/junit "junit-4.13.2.jar")
