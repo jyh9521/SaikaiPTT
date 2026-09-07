@@ -10,6 +10,7 @@ import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.locale.LocaleController
 import com.saikai.ptt.logging.AndroidLogSink
+import com.saikai.ptt.service.ServiceStatus
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -79,6 +80,16 @@ class AppContainer(
     val localUsers: LocalUserRepository by lazy {
         SettingsLocalUserRepository(settingsRepository)
     }
+
+    /**
+     * What the communication service is doing, readable when it is not running.
+     *
+     * Application scope on purpose. ADR-005 section 5 says a killed process is
+     * not promised a restart, so the screen that opens next has to be able to ask
+     * what state things are in -- exactly the case where there is no service to
+     * bind to.
+     */
+    val serviceStatus: ServiceStatus = ServiceStatus()
 
     /**
      * Interface language. Application scope because notifications and the

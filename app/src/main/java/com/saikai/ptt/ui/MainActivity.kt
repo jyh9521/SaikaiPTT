@@ -16,6 +16,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +29,8 @@ import com.saikai.ptt.R
 import com.saikai.ptt.SaikaiApplication
 import com.saikai.ptt.core.domain.AppLanguage
 import com.saikai.ptt.locale.AppLocale
+import com.saikai.ptt.service.CommunicationService
+import com.saikai.ptt.service.ServiceState
 import com.saikai.ptt.ui.theme.SaikaiPttTheme
 import kotlinx.coroutines.launch
 
@@ -58,9 +62,21 @@ class MainActivity : ComponentActivity() {
             SaikaiPttTheme {
                 LaunchedEffect(Unit) { container.locales.reconcile(this@MainActivity) }
 
+                val serviceState by container.serviceStatus.state.collectAsState()
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     PlaceholderScreen(
                         language = AppLocale.cached(this@MainActivity),
+                        serviceState = serviceState,
+                        onToggleService = {
+                            if (serviceState == ServiceState.READY ||
+                                serviceState == ServiceState.STARTING
+                            ) {
+                                CommunicationService.stop(this@MainActivity)
+                            } else {
+                                CommunicationService.start(this@MainActivity)
+                            }
+                        },
                         onSelectLanguage = { language ->
                             container.locales.set(this@MainActivity, language)
                             // Below Android 13 the locale is applied by wrapping
@@ -80,6 +96,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PlaceholderScreen(
     language: AppLanguage,
+    serviceState: ServiceState,
+    onToggleService: () -> Unit,
     onSelectLanguage: suspend (AppLanguage) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -115,6 +133,22 @@ private fun PlaceholderScreen(
                     Text(stringResource(R.string.language_english))
                 }
             }
+
+            Text(
+                text = "${stringResource(R.string.placeholder_service_label)}: $serviceState",
+                style = MaterialTheme.typography.labelMedium,
+            )
+            OutlinedButton(onClick = onToggleService) {
+                Text(
+                    stringResource(
+                        if (serviceState == ServiceState.READY || serviceState == ServiceState.STARTING) {
+                            R.string.placeholder_service_stop
+                        } else {
+                            R.string.placeholder_service_start
+                        }
+                    )
+                )
+            }
         }
     }
 }
@@ -123,6 +157,11 @@ private fun PlaceholderScreen(
 @Composable
 private fun PlaceholderScreenPreview() {
     SaikaiPttTheme {
-        PlaceholderScreen(language = AppLanguage.JAPANESE, onSelectLanguage = {})
+        PlaceholderScreen(
+            language = AppLanguage.JAPANESE,
+            serviceState = ServiceState.STOPPED,
+            onToggleService = {},
+            onSelectLanguage = {},
+        )
     }
 }

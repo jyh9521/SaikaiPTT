@@ -5,9 +5,7 @@
         Permissions are declared in full here so the manifest never has to be
         revisited piecemeal. See docs/ADR/ADR-005 section 1.
 
-        The <service> element itself is NOT declared yet: it is added in Task15
-        together with the class it names. A manifest entry pointing at a class
-        that does not exist fails the MissingClass lint check.
+        The <service> element is declared at the bottom, alongside the activity.
     -->
 
     <!-- Network. INTERNET covers UDP sockets on the LAN; the app makes no
@@ -71,6 +69,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Owns the sockets, the receive threads and the multicast lock, so that
+            they survive the Activity going away (docs/ADR/ADR-005 section 1).
+
+            Both types are declared here because the manifest cannot be changed
+            at runtime, but the service starts as connectedDevice alone. It
+            promotes to include microphone only while the talk button is held
+            (ADR-005 section 2). That split is what lets receiving work with the
+            screen off: Android 14 forbids promoting to microphone from the
+            background, and receiving never needs it.
+        -->
+        <service
+            android:name=".service.CommunicationService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice|microphone" />
 
     </application>
 

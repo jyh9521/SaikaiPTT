@@ -19,6 +19,17 @@
     <string name="placeholder_subtitle">プロジェクトの初期化が完了しました</string>
     <string name="placeholder_language_label">表示言語</string>
 
+    <!-- Debug only, removed with the placeholder screen in Task32. -->
+    <string name="placeholder_service_label">通信サービス</string>
+    <string name="placeholder_service_start">開始</string>
+    <string name="placeholder_service_stop">停止</string>
+
+    <!-- Ongoing foreground-service notification. Replaced in Task31. -->
+    <string name="notification_channel_communication">通信</string>
+    <string name="notification_channel_communication_description">受信を続けるために表示される通知です</string>
+    <string name="notification_service_title">西海PTT</string>
+    <string name="notification_service_text">受信待機中</string>
+
     <!-- Endonyms: a language is always offered in its own script. -->
     <string name="language_japanese" translatable="false">日本語</string>
     <string name="language_english" translatable="false">English</string>

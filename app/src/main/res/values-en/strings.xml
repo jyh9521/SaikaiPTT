@@ -4,4 +4,12 @@
 
     <string name="placeholder_subtitle">Project initialised</string>
     <string name="placeholder_language_label">Display language</string>
+    <string name="placeholder_service_label">Communication service</string>
+    <string name="placeholder_service_start">Start</string>
+    <string name="placeholder_service_stop">Stop</string>
+
+    <string name="notification_channel_communication">Communication</string>
+    <string name="notification_channel_communication_description">Shown so the app can keep receiving</string>
+    <string name="notification_service_title">SaikaiPTT</string>
+    <string name="notification_service_text">Listening</string>
 </resources>
