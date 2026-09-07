@@ -29,8 +29,15 @@ interface VoiceAudio {
     /** Closes the microphone and discards or flushes whatever is buffered. */
     suspend fun stopCapture()
 
-    /** Opens the speaker for an incoming session. */
-    suspend fun startPlayback(sessionId: SessionId)
+    /**
+     * Opens the speaker for an incoming session.
+     *
+     * @return false when it cannot be opened -- most often because a phone call
+     *   holds the audio focus. The session is then refused rather than accepted,
+     *   because accepting it would mean playing nothing while telling the
+     *   speaker they were heard.
+     */
+    suspend fun startPlayback(sessionId: SessionId): Boolean
 
     /** Closes the speaker. */
     suspend fun stopPlayback()
@@ -46,6 +53,6 @@ interface VoiceAudio {
 object NoVoiceAudio : VoiceAudio {
     override suspend fun startCapture(): Boolean = true
     override suspend fun stopCapture() = Unit
-    override suspend fun startPlayback(sessionId: SessionId) = Unit
+    override suspend fun startPlayback(sessionId: SessionId): Boolean = true
     override suspend fun stopPlayback() = Unit
 }

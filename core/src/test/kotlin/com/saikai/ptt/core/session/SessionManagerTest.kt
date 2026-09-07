@@ -317,6 +317,20 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `a call that cannot be played is refused rather than silently accepted`() = runTest {
+        // A phone call holding the audio focus. Accepting would tell the speaker
+        // they were heard while playing nothing.
+        audio.speakerAvailable = false
+        val manager = manager()
+
+        manager.onVoiceStart(bob.deviceId, SessionId.random(), voiceStart("Bob"), bob.endpoint)
+
+        assertEquals(1, signals.count("BUSY"))
+        assertEquals(0, signals.count("VOICE_ACCEPT"))
+        assertEquals(SessionState.Idle, manager.state.value)
+    }
+
+    @Test
     fun `a busy device refuses and keeps the session it has`() = runTest {
         val manager = manager()
         val first = SessionId.random()

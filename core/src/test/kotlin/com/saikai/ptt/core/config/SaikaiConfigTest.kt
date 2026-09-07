@@ -246,4 +246,23 @@ class SaikaiConfigTest {
             AudioConfig().captureSources,
         )
     }
+
+    @Test
+    fun `the playback buffer is sized against hand-offs, not against the jitter buffer`() {
+        // Sizing it to the jitter buffer's depth would add that latency twice:
+        // once where the delay is decided and once in the device.
+        val audio = AudioConfig()
+        val jitter = JitterBufferConfig()
+
+        assertTrue(audio.playbackBufferFrames < jitter.maxFrames)
+        assertEquals(audio.frameSizeBytes * 6, audio.playbackBufferBytes(1))
+        assertEquals(audio.frameSizeBytes * 40, audio.playbackBufferBytes(audio.frameSizeBytes * 40))
+    }
+
+    @Test
+    fun `a playback buffer of one frame runs dry`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioConfig(playbackBufferFrames = 1)
+        }
+    }
 }

@@ -320,6 +320,15 @@ data class AudioConfig(
      * the latency it can hide stays inside the end-to-end budget.
      */
     val captureBufferFrames: Int = 4,
+    /**
+     * Frames the output device must be able to hold, over the platform minimum.
+     *
+     * Six, against the jitter buffer's maximum depth of ten: the buffer decides
+     * how much delay to accept, and this only has to keep the device from
+     * running dry between one hand-off and the next. Sizing it to the jitter
+     * buffer instead would add that latency twice.
+     */
+    val playbackBufferFrames: Int = 6,
 ) {
     /** 320 samples at 16 kHz / 20 ms. */
     val frameSizeSamples: Int
@@ -343,6 +352,9 @@ data class AudioConfig(
         require(captureBufferFrames >= 2) {
             "A capture buffer of one frame leaves no slack for a late reader"
         }
+        require(playbackBufferFrames >= 2) {
+            "A playback buffer of one frame runs dry between hand-offs"
+        }
     }
 
     /**
@@ -354,6 +366,10 @@ data class AudioConfig(
      */
     fun captureBufferBytes(platformMinimumBytes: Int): Int =
         maxOf(platformMinimumBytes, captureBufferFrames * frameSizeBytes)
+
+    /** The output buffer to request, on the same principle as [captureBufferBytes]. */
+    fun playbackBufferBytes(platformMinimumBytes: Int): Int =
+        maxOf(platformMinimumBytes, playbackBufferFrames * frameSizeBytes)
 }
 
 /**

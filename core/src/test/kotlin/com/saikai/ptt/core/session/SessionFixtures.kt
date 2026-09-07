@@ -60,7 +60,10 @@ internal class RecordingSignals(private val sendSucceeds: () -> Boolean = { true
 }
 
 /** A microphone and a speaker that only count how often they were opened. */
-internal class FakeAudio(var microphoneAvailable: Boolean = true) : VoiceAudio {
+internal class FakeAudio(
+    var microphoneAvailable: Boolean = true,
+    var speakerAvailable: Boolean = true,
+) : VoiceAudio {
     var capturing = false
         private set
     var playing = false
@@ -79,8 +82,10 @@ internal class FakeAudio(var microphoneAvailable: Boolean = true) : VoiceAudio {
         capturing = false
     }
 
-    override suspend fun startPlayback(sessionId: SessionId) {
+    override suspend fun startPlayback(sessionId: SessionId): Boolean {
+        if (!speakerAvailable) return false
         playing = true
+        return true
     }
 
     override suspend fun stopPlayback() {

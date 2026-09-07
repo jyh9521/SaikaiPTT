@@ -368,7 +368,15 @@ class SessionManager(
         endpoint: PeerEndpoint,
     ) {
         val now = nowMillis()
-        audio.startPlayback(sessionId)
+        if (!audio.startPlayback(sessionId)) {
+            // Nothing to play it through -- a phone call has the audio focus, or
+            // the output device will not open. Refusing is the honest answer:
+            // accepting would tell the speaker they were heard while playing
+            // silence.
+            logger.w(LogCategory.SESSION) { "cannot open the speaker; refusing the session" }
+            signals.busy(sender, endpoint)
+            return
+        }
         enter(
             SessionState.Receiving(
                 sessionId = sessionId,

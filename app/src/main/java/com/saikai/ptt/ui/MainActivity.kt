@@ -37,9 +37,11 @@ import androidx.compose.ui.unit.dp
 import com.saikai.ptt.BuildConfig
 import com.saikai.ptt.R
 import com.saikai.ptt.SaikaiApplication
+import com.saikai.ptt.audio.AndroidAudioPlayer
 import com.saikai.ptt.audio.AndroidAudioRecorder
 import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.domain.AppLanguage
+import com.saikai.ptt.core.domain.AudioPlayer
 import com.saikai.ptt.core.domain.AudioRecorder
 import com.saikai.ptt.core.domain.Peer
 import com.saikai.ptt.locale.AppLocale
@@ -51,6 +53,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * Placeholder entry point.
@@ -79,6 +83,7 @@ class MainActivity : ComponentActivity() {
         // the only way to check ADR-004's capture path on a real microphone,
         // which is what Task20 is accepted on.
         val recorder = AndroidAudioRecorder(this, container.config, container.logger)
+        val speaker = AndroidAudioPlayer(container.config, container.logger)
 
         setContent {
             SaikaiPttTheme {
@@ -104,6 +109,13 @@ class MainActivity : ComponentActivity() {
                         },
                         onProbeMicrophone = {
                             probeMicrophone(recorder, container.config.audio.frameSizeBytes)
+                        },
+                        onProbeSpeaker = {
+                            probeSpeaker(
+                                speaker,
+                                container.config.audio.sampleRateHz,
+                                container.config.audio.frameSizeSamples,
+                            )
                         },
                         onToggleService = {
                             if (serviceState == ServiceState.READY ||
@@ -137,6 +149,7 @@ private fun PlaceholderScreen(
     peers: List<Peer>,
     activeUserName: String?,
     onProbeMicrophone: suspend () -> String,
+    onProbeSpeaker: suspend () -> String,
     onSetName: suspend (String) -> Unit,
     onToggleService: () -> Unit,
     onSelectLanguage: suspend (AppLanguage) -> Unit,
@@ -212,6 +225,7 @@ private fun PlaceholderScreen(
             }
 
             MicrophoneProbe(onProbe = onProbeMicrophone)
+            SpeakerProbe(onProbe = onProbeSpeaker)
 
             Text(
                 text = "${stringResource(R.string.placeholder_peers_label)} (${peers.size})",
@@ -266,6 +280,67 @@ private fun MicrophoneProbe(onProbe: suspend () -> String) {
     }
 }
 
+/** Plays a test tone. Debug only; goes with the placeholder in Task32. */
+@Composable
+private fun SpeakerProbe(onProbe: suspend () -> String) {
+    val scope = rememberCoroutineScope()
+    var result by remember { mutableStateOf("") }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(onClick = {
+            result = "..."
+            scope.launch { result = onProbe() }
+        }) {
+            Text(stringResource(R.string.placeholder_speaker_test))
+        }
+        Text(text = result, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+/**
+ * Two seconds of 440 Hz, written one 20 ms frame at a time.
+ *
+ * Paced like the real receive path rather than written in one go, so what it
+ * proves is what matters: that the device keeps up frame by frame. A tone
+ * written as a single buffer would sound fine on a device that cannot.
+ */
+private suspend fun probeSpeaker(
+    player: AudioPlayer,
+    sampleRateHz: Int,
+    frameSizeSamples: Int,
+): String {
+    return when (val outcome = player.start()) {
+        is Outcome.Failure -> "failed: ${outcome.error}"
+        is Outcome.Success -> {
+            val frame = ByteArray(frameSizeSamples * 2)
+            var phase = 0.0
+            val step = 2.0 * PI * TONE_HZ / sampleRateHz
+            var accepted = 0
+            val frames = PROBE_MILLIS / 20
+
+            repeat(frames.toInt()) {
+                for (sample in 0 until frameSizeSamples) {
+                    val value = (sin(phase) * TONE_AMPLITUDE).toInt().toShort()
+                    frame[sample * 2] = (value.toInt() and 0xFF).toByte()
+                    frame[sample * 2 + 1] = ((value.toInt() shr 8) and 0xFF).toByte()
+                    phase += step
+                }
+                accepted += player.write(frame, 0, frame.size)
+                delay(20)
+            }
+
+            player.stop()
+            "wrote=$accepted/${frames * frame.size}B"
+        }
+    }
+}
+
+private const val TONE_HZ = 440.0
+private const val TONE_AMPLITUDE = 8_000.0
+
 /**
  * Two seconds of capture, counted and measured.
  *
@@ -318,6 +393,7 @@ private fun PlaceholderScreenPreview() {
             peers = emptyList(),
             activeUserName = null,
             onProbeMicrophone = { "" },
+            onProbeSpeaker = { "" },
             onSetName = {},
             onToggleService = {},
             onSelectLanguage = {},
