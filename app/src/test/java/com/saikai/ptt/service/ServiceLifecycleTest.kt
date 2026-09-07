@@ -1,5 +1,6 @@
 package com.saikai.ptt.service
 
+import com.saikai.ptt.core.common.LifecycleStep
 import com.saikai.ptt.core.config.LoggingConfig
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
@@ -226,6 +227,113 @@ class ServiceLifecycleTest {
 
         assertEquals(1, first.stopCount)
         assertEquals(ServiceState.STOPPED, lifecycle.state.value)
+    }
+
+    // --- Releasing and restoring part of the sequence ---------------------------------
+
+    @Test
+    fun `releasing from a step leaves everything before it running`() = runBlocking {
+        val a = FakeStep("a")
+        val b = FakeStep("b")
+        val c = FakeStep("c")
+        val lifecycle = lifecycleOf(a, b, c)
+        lifecycle.start()
+        log.clear()
+
+        lifecycle.releaseFrom("b")
+
+        assertEquals(listOf("stop:c", "stop:b"), log)
+        assertEquals(0, a.stopCount)
+        assertEquals(ServiceState.DEGRADED, lifecycle.state.value)
+    }
+
+    @Test
+    fun `restoring starts exactly what was released, in order`() = runBlocking {
+        val a = FakeStep("a")
+        val b = FakeStep("b")
+        val c = FakeStep("c")
+        val lifecycle = lifecycleOf(a, b, c)
+        lifecycle.start()
+        lifecycle.releaseFrom("b")
+        log.clear()
+
+        assertTrue(lifecycle.restore().isSuccess)
+
+        assertEquals(listOf("start:b", "start:c"), log)
+        assertEquals(1, a.startCount)
+        assertEquals(2, b.startCount)
+        assertEquals(ServiceState.READY, lifecycle.state.value)
+    }
+
+    @Test
+    fun `a network drop and recovery can repeat without stranding a step`() = runBlocking {
+        val prefix = FakeStep("prefix")
+        val cycled = FakeStep("cycled")
+        val lifecycle = lifecycleOf(prefix, cycled)
+        lifecycle.start()
+
+        repeat(5) {
+            lifecycle.releaseFrom("cycled")
+            lifecycle.restore()
+        }
+
+        assertEquals(6, cycled.startCount)
+        assertEquals(5, cycled.stopCount)
+        assertEquals(1, prefix.startCount)
+        assertEquals(0, prefix.stopCount)
+        assertEquals(ServiceState.READY, lifecycle.state.value)
+
+        lifecycle.stop()
+        assertEquals(6, cycled.stopCount)
+        assertEquals(1, prefix.stopCount)
+    }
+
+    @Test
+    fun `releasing from an unknown step changes nothing`() = runBlocking {
+        val step = FakeStep("a")
+        val lifecycle = lifecycleOf(step)
+        lifecycle.start()
+
+        lifecycle.releaseFrom("not-a-step")
+
+        assertEquals(0, step.stopCount)
+        assertEquals(ServiceState.READY, lifecycle.state.value)
+    }
+
+    @Test
+    fun `releasing twice from the same step does not release it twice`() = runBlocking {
+        val step = FakeStep("a")
+        val lifecycle = lifecycleOf(FakeStep("prefix"), step)
+        lifecycle.start()
+
+        lifecycle.releaseFrom("a")
+        lifecycle.releaseFrom("a")
+
+        assertEquals(1, step.stopCount)
+    }
+
+    @Test
+    fun `stopping from degraded releases what is left`() = runBlocking {
+        val prefix = FakeStep("prefix")
+        val lifecycle = lifecycleOf(prefix, FakeStep("cycled"))
+        lifecycle.start()
+        lifecycle.releaseFrom("cycled")
+
+        lifecycle.stop()
+
+        assertEquals(1, prefix.stopCount)
+        assertEquals(ServiceState.STOPPED, lifecycle.state.value)
+    }
+
+    @Test
+    fun `restoring when nothing was released is a no-op`() = runBlocking {
+        val step = FakeStep("a")
+        val lifecycle = lifecycleOf(step)
+        lifecycle.start()
+
+        assertTrue(lifecycle.restore().isSuccess)
+
+        assertEquals(1, step.startCount)
     }
 
     // --- Cancellation -------------------------------------------------------------------

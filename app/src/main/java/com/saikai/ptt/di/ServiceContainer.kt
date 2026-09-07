@@ -1,6 +1,7 @@
 package com.saikai.ptt.di
 
 import android.app.Service
+import com.saikai.ptt.core.common.LifecycleStep
 import com.saikai.ptt.core.domain.DeviceId
 import com.saikai.ptt.core.domain.LocalPresence
 import com.saikai.ptt.core.domain.PeerRegistry
@@ -10,9 +11,9 @@ import com.saikai.ptt.core.protocol.PacketRateLimiter
 import com.saikai.ptt.core.protocol.PacketValidator
 import com.saikai.ptt.network.BoundPorts
 import com.saikai.ptt.network.InboundPacketRouter
+import com.saikai.ptt.network.NetworkMonitor
 import com.saikai.ptt.network.UdpTransport
 import com.saikai.ptt.service.ForegroundStep
-import com.saikai.ptt.service.LifecycleStep
 import com.saikai.ptt.service.MulticastLockStep
 import com.saikai.ptt.service.ServiceNotifications
 import com.saikai.ptt.service.TransportStep
@@ -127,13 +128,27 @@ class ServiceContainer(
      * the transport, audio and the session manager after those -- rather than
      * editing a start method and a stop method and getting one of them wrong.
      */
+    /** Watches for WiFi appearing, disappearing and being renumbered. */
+    val networkMonitor: NetworkMonitor = NetworkMonitor(service, app.logger)
+
+    private val transportStep = TransportStep(transport, app.logger) { ports ->
+        boundPorts = ports
+        onBound(ports)
+    }
+
+    /**
+     * The first step that cannot work without a network.
+     *
+     * Everything from here on is released when WiFi drops and started again when
+     * it returns; the foreground notification and the multicast lock in front of
+     * it stay (`docs/03_Protocol.md` section 41).
+     */
+    val firstNetworkStep: String = transportStep.name
+
     val steps: List<LifecycleStep> = listOf(
         ForegroundStep(service, notifications),
         MulticastLockStep(service, app.logger),
-        TransportStep(transport, app.logger) { ports ->
-            boundPorts = ports
-            onBound(ports)
-        },
+        transportStep,
         discovery,
         presence,
     )

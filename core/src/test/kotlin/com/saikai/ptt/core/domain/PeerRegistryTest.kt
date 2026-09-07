@@ -230,6 +230,62 @@ class PeerRegistryTest {
         assertTrue(registry.snapshot().isEmpty())
     }
 
+    // --- No network at all -----------------------------------------------------
+
+    @Test
+    fun `with no network every peer is offline, however recently it was heard`() {
+        observe(alice)
+        observe(bob, address = "192.168.1.11")
+        assertEquals(PresenceState.ONLINE, stateOf(alice))
+
+        assertTrue(registry.setNetworkAvailable(false))
+
+        assertTrue(registry.snapshot().all { it.state == PresenceState.OFFLINE })
+        // The records survive: a list that empties and refills is a worse answer
+        // to "did my radio just disappear" than one that greys out.
+        assertEquals(2, registry.snapshot().size)
+        assertEquals("Kenji", registry.peer(alice)!!.userName)
+    }
+
+    @Test
+    fun `the network coming back does not need a new packet if nothing expired`() {
+        observe(alice)
+        registry.setNetworkAvailable(false)
+        clock.advance(1_000)
+
+        registry.setNetworkAvailable(true)
+
+        assertEquals(PresenceState.ONLINE, stateOf(alice))
+    }
+
+    @Test
+    fun `a peer that timed out while the network was down stays offline`() {
+        observe(alice)
+        registry.setNetworkAvailable(false)
+        clock.advance(timeout + 1)
+
+        registry.setNetworkAvailable(true)
+
+        assertEquals(PresenceState.OFFLINE, stateOf(alice))
+    }
+
+    @Test
+    fun `setting the network state to what it already was changes nothing`() {
+        observe(alice)
+        assertFalse(registry.setNetworkAvailable(true))
+        assertTrue(registry.setNetworkAvailable(false))
+        assertFalse(registry.setNetworkAvailable(false))
+    }
+
+    @Test
+    fun `a session with an unreachable peer is still no session`() {
+        observe(alice)
+        registry.setSessionPeer(alice)
+        registry.setNetworkAvailable(false)
+
+        assertEquals(PresenceState.OFFLINE, stateOf(alice))
+    }
+
     // --- Identity ----------------------------------------------------------------
 
     @Test
@@ -404,12 +460,13 @@ class PeerRegistryTest {
 
         repeat(4_000) {
             val device = devices[random.nextInt(devices.size)]
-            when (random.nextInt(6)) {
+            when (random.nextInt(7)) {
                 0 -> observe(device, PresenceKind.DISCOVERY, remoteBusy = random.nextBoolean())
                 1 -> observe(device, PresenceKind.DISCOVERY_RESPONSE, remoteBusy = random.nextBoolean())
                 2 -> observe(device, PresenceKind.HEARTBEAT, remoteBusy = random.nextBoolean())
                 3 -> registry.onActivity(device)
                 4 -> registry.setSessionPeer(if (random.nextBoolean()) device else null)
+                5 -> registry.setNetworkAvailable(random.nextInt(4) != 0)
                 else -> registry.evaluate()
             }
             record()

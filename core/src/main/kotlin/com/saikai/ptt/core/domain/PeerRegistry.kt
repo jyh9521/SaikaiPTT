@@ -81,6 +81,7 @@ class PeerRegistry(
     private val lock = Any()
     private val entries = LinkedHashMap<DeviceId, Entry>()
     private var sessionPeer: DeviceId? = null
+    private var networkAvailable: Boolean = true
 
     private val _peers = MutableStateFlow<List<Peer>>(emptyList())
 
@@ -196,6 +197,26 @@ class PeerRegistry(
     }
 
     /**
+     * Records whether this device has a network at all.
+     *
+     * A fourth fact, and the one that outranks the rest: with no network, every
+     * peer is unreachable regardless of when it was last heard from
+     * (`docs/03_Protocol.md` section 41). Setting it is what makes the list go
+     * offline the moment WiFi drops, rather than sixteen seconds later after a
+     * sweep that could not have heard anything anyway.
+     *
+     * Entries are kept, not cleared. Their endpoints are stale, but nothing
+     * sends to an offline peer, and a list that empties and refills is a worse
+     * answer to "did my radio just disappear" than one that greys out.
+     */
+    fun setNetworkAvailable(available: Boolean): Boolean = synchronized(lock) {
+        if (networkAvailable == available) return false
+        networkAvailable = available
+        refresh(nowMillis())
+        return true
+    }
+
+    /**
      * The periodic sweep (`docs/03_Protocol.md` section 13).
      *
      * Timeouts are the one transition with no event behind it, so something has
@@ -230,6 +251,7 @@ class PeerRegistry(
     fun clear() = synchronized(lock) {
         entries.clear()
         sessionPeer = null
+        networkAvailable = true
         _peers.value = emptyList()
     }
 
@@ -262,7 +284,9 @@ class PeerRegistry(
      *
      * Order is precedence, and each line earns its place:
      *
-     * - Silence outranks everything. A peer that stopped answering is offline
+     * - No network outranks everything, including silence: nothing is reachable
+     *   and no amount of waiting will change that.
+     * - Silence outranks the rest. A peer that stopped answering is offline
      *   even mid-call; the session layer finds out from here, not the reverse.
      * - A session with *this* device outranks the peer's own busy flag, which is
      *   up to a heartbeat old and would otherwise show our own call as somebody
@@ -271,6 +295,7 @@ class PeerRegistry(
      * - A HEARTBEAT is what separates ONLINE from DISCOVERED.
      */
     private fun derive(deviceId: DeviceId, entry: Entry, now: Long): PresenceState = when {
+        !networkAvailable -> PresenceState.OFFLINE
         now - entry.lastSeenMillis >= timeoutMillis -> PresenceState.OFFLINE
         deviceId == sessionPeer -> PresenceState.COMMUNICATING
         entry.remoteBusy -> PresenceState.BUSY

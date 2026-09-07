@@ -34,3 +34,19 @@ UDP socket 与接收循环。两个 socket、两条接收线程，按 `docs/ADR/
 
 发送侧的 Discovery / Heartbeat 调度在 `app.discovery` 与 `app.presence`；
 网络恢复时重建两个 socket 并重新通告 voicePort 见 ADR-002「Consequences」。
+
+## 网络变化监听（Task18）
+
+`NetworkLinkSource` / `NetworkLink` 是纯 Kotlin 的接口与值，`NetworkMonitor` 是它的
+`ConnectivityManager` 实现。分开是为了让恢复流程能被测试驱动，而不是靠拔手机——
+网络恢复里所有值得测的东西都在**顺序**上，而顺序在 JVM 测试里根本够不到
+`ConnectivityManager`。
+
+**回调，绝不轮询**（`01_PRD §42`）：定时器为了发现一件平台会免费告诉我们的事，
+要付出一整天的耗电。
+
+只请求 WiFi 与 Ethernet，**不加 `NET_CAPABILITY_INTERNET`**：没有外网路由的 WiFi
+正是本产品的常态，要求它会让 app 在恰恰为之设计的孤立现场网络上变成瞎子。
+
+`NetworkLink` 带 IPv4 地址列表，因为**网络可以在一次 DHCP 换网段中始终「可用」**，
+而所有对端关于「往哪儿发语音」的认知同时全部作废，却没有任何一个回调说丢过东西。

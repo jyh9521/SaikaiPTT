@@ -235,9 +235,9 @@ app  ──────────────► core
  ├─ ui        ─► core.domain, core.config
  ├─ service   ─► core.session, core.domain, app.network, app.discovery,
  │                app.presence, app.audio, app.overlay
- ├─ network   ─► core.protocol, core.config, core.common
- ├─ discovery ─► app.network, core.protocol
- ├─ presence  ─► app.network, core.protocol
+ ├─ network   ─► core.protocol, core.config, core.common, core.logger
+ ├─ discovery ─► app.network, core.protocol, core.domain, core.config, core.common
+ ├─ presence  ─► app.network, core.protocol, core.domain, core.config, core.common
  ├─ audio     ─► core.config, core.common
  ├─ storage   ─► core.domain, core.common
  ├─ asr       ─► core.domain, app.storage
@@ -249,6 +249,10 @@ core.domain    ─► core.common, core.config, core.logger
 core.logger    ─► core.common, core.config
 core.config    ─► core.common, core.logger, core.protocol
 ```
+
+`LifecycleStep` 位于 `core.common` 而不是 `app.service`：实现它的是传输、发现、
+在线状态这些**下层**组件，而下层不得知道服务存在。一个小到没有任何自身依赖的接口，
+是让那个箭头保持单向的最省事的办法。
 
 `core` 内部的包依赖不是一条严格的单向链，上表如实反映实现：
 

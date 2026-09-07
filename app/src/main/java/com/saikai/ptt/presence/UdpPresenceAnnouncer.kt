@@ -1,5 +1,6 @@
 package com.saikai.ptt.presence
 
+import com.saikai.ptt.core.common.LifecycleStep
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.LocalPresence
 import com.saikai.ptt.core.domain.PeerEndpoint
@@ -20,7 +21,6 @@ import com.saikai.ptt.network.InboundPacketListener
 import com.saikai.ptt.network.InboundPacketRouter
 import com.saikai.ptt.network.TransportChannel
 import com.saikai.ptt.network.UdpTransport
-import com.saikai.ptt.service.LifecycleStep
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

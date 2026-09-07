@@ -51,6 +51,7 @@ class CommunicationService : Service() {
     private var container: ServiceContainer? = null
     private var lifecycle: ServiceLifecycle? = null
     private var peerMirror: Job? = null
+    private var recovery: NetworkRecovery? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -140,6 +141,17 @@ class CommunicationService : Service() {
                 peerMirror = scope.launch {
                     serviceContainer.peers.peers.collect(status::publishPeers)
                 }
+                // Started after the lifecycle, and above it: recovery cycles a
+                // suffix of the very list that would otherwise contain it.
+                recovery = NetworkRecovery(
+                    monitor = serviceContainer.networkMonitor,
+                    lifecycle = serviceLifecycle,
+                    peers = serviceContainer.peers,
+                    logger = app.logger,
+                    firstNetworkStep = serviceContainer.firstNetworkStep,
+                    // Task19 supplies the session machine's own teardown here.
+                    onNetworkLost = { serviceContainer.setBusy(false) },
+                ).also { it.start(scope) }
             }
             is Outcome.Failure -> {
                 // Everything the sequence started has already been released.
@@ -155,6 +167,10 @@ class CommunicationService : Service() {
     private suspend fun shutdown(): Unit = mutex.withLock {
         peerMirror?.cancel()
         peerMirror = null
+        // Before the lifecycle: a recovery that fired mid-shutdown would try to
+        // restore the very steps being released.
+        recovery?.stop()
+        recovery = null
         lifecycle?.stop()
         container?.close()
         lifecycle = null

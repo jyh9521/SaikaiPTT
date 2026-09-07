@@ -1,5 +1,6 @@
 package com.saikai.ptt.service
 
+import com.saikai.ptt.core.common.LifecycleStep
 import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.Logger
@@ -17,37 +18,19 @@ enum class ServiceState {
     READY,
     STOPPING,
 
+    /**
+     * Running, but the network half is released.
+     *
+     * The service still holds the foreground notification and the multicast
+     * lock; the sockets, discovery and heartbeat are down because there is no
+     * network to run them on (`docs/03_Protocol.md` section 41). Saying READY
+     * here would be a lie, and saying STOPPED would invite a restart that is
+     * not needed.
+     */
+    DEGRADED,
+
     /** A start step failed. Everything that had started was rolled back. */
     FAILED,
-}
-
-/**
- * One resource the service brings up and takes down.
- *
- * Steps are listed in start order and released in exactly the reverse
- * (`docs/02_Architecture.md` section 26). Writing the sequence as a list rather
- * than as a method with eight lines in it is what makes the rollback provable:
- * there is one loop forwards and one loop backwards, and a later task adding
- * audio or a session manager inserts a step at the right position instead of
- * editing two mirrored blocks and getting one of them wrong.
- */
-interface LifecycleStep {
-
-    /** Short, stable, and safe to log. Identifies the step in a failure. */
-    val name: String
-
-    /** Acquires the resource. Throwing means the start failed at this step. */
-    suspend fun start()
-
-    /**
-     * Releases the resource.
-     *
-     * Always called during rollback, including for the step whose [start] threw,
-     * so it must tolerate a start that never ran or only half ran. It should not
-     * throw -- a throw here is logged and the remaining steps are
-     * still released, but a step that cleans up quietly is easier to trust.
-     */
-    suspend fun stop()
 }
 
 /** Which step failed to start, and why. */
@@ -103,9 +86,38 @@ class ServiceLifecycle(
      */
     suspend fun start(): Outcome<Unit, LifecycleFailure> = mutex.withLock {
         if (_state.value == ServiceState.READY) return Outcome.success(Unit)
-
         transition(ServiceState.STARTING)
-        for (step in steps) {
+        return startFrom(0)
+    }
+
+    /**
+     * Releases the steps from [fromStep] onward, leaving the earlier ones running.
+     *
+     * What network loss does (`docs/03_Protocol.md` section 41): the sockets and
+     * everything above them go, the foreground notification and the multicast
+     * lock stay. Expressed as a suffix of the same ordered list rather than as a
+     * second teardown routine, so that a task which inserts a step gets it torn
+     * down here too without knowing this method exists.
+     */
+    suspend fun releaseFrom(fromStep: String): Unit = mutex.withLock {
+        if (_state.value != ServiceState.READY && _state.value != ServiceState.DEGRADED) return
+        val index = started.indexOfFirst { it.name == fromStep }
+        if (index < 0 || index >= started.size) return
+        release(index)
+        transition(ServiceState.DEGRADED)
+        logger.i(LogCategory.SERVICE) { "released everything from $fromStep onward" }
+    }
+
+    /** Starts whatever [releaseFrom] released, in the original order. */
+    suspend fun restore(): Outcome<Unit, LifecycleFailure> = mutex.withLock {
+        if (_state.value != ServiceState.DEGRADED) return Outcome.success(Unit)
+        transition(ServiceState.STARTING)
+        return startFrom(started.size)
+    }
+
+    private suspend fun startFrom(index: Int): Outcome<Unit, LifecycleFailure> {
+        for (position in index until steps.size) {
+            val step = steps[position]
             // Recorded before it runs, not after. A step that acquires two
             // things and fails on the second still has to be given the chance to
             // release the first, and only the step knows what it got that far.
@@ -118,12 +130,12 @@ class ServiceLifecycle(
                 // The caller is going away. Release what we hold, then let the
                 // cancellation continue -- swallowing it would leave the service
                 // half-started with nobody waiting to finish it.
-                releaseStarted()
+                release(0)
                 transition(ServiceState.STOPPED)
                 throw cancellation
             } catch (error: Throwable) {
                 logger.e(LogCategory.SERVICE, error) { "service start failed at ${step.name}" }
-                releaseStarted()
+                release(0)
                 transition(ServiceState.FAILED)
                 return Outcome.failure(LifecycleFailure(step.name, error))
             }
@@ -143,7 +155,7 @@ class ServiceLifecycle(
     suspend fun stop(): Unit = mutex.withLock {
         if (_state.value == ServiceState.STOPPED) return
         transition(ServiceState.STOPPING)
-        releaseStarted()
+        release(0)
         transition(ServiceState.STOPPED)
         logger.i(LogCategory.SERVICE) { "service stopped" }
     }
@@ -153,8 +165,11 @@ class ServiceLifecycle(
         onState(next)
     }
 
-    private suspend fun releaseStarted() {
-        for (step in started.asReversed()) {
+    /** Releases started steps from [fromIndex] onward, last first. */
+    private suspend fun release(fromIndex: Int) {
+        for (position in started.indices.reversed()) {
+            if (position < fromIndex) break
+            val step = started[position]
             try {
                 step.stop()
             } catch (cancellation: CancellationException) {
@@ -167,7 +182,7 @@ class ServiceLifecycle(
             } catch (error: Throwable) {
                 logger.e(LogCategory.SERVICE, error) { "failed to release ${step.name}" }
             }
+            started.removeAt(position)
         }
-        started.clear()
     }
 }

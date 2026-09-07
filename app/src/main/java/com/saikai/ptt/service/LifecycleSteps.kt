@@ -3,6 +3,7 @@ package com.saikai.ptt.service
 import android.app.Service
 import android.content.Context
 import android.net.wifi.WifiManager
+import com.saikai.ptt.core.common.LifecycleStep
 import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.Logger
