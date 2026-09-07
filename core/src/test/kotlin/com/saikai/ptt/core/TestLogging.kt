@@ -1,4 +1,4 @@
-package com.saikai.ptt.core.protocol
+package com.saikai.ptt.core
 
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel

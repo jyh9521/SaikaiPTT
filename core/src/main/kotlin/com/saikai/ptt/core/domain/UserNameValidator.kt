@@ -37,4 +37,26 @@ object UserNameValidator {
 
         return Outcome.success(name)
     }
+
+    /**
+     * Checks a name that arrived from another device.
+     *
+     * Only the wire rule applies here. [MAX_CODE_POINTS] is this app's own input
+     * limit, chosen so the device list stays readable; a peer built differently,
+     * or a later version of this one, may legitimately send a longer name within
+     * the 64-byte budget, and refusing it would make that device invisible rather
+     * than merely untidy.
+     *
+     * The protocol layer has already enforced the byte limit by the time a name
+     * reaches this. Checking again costs nothing and means the domain does not
+     * depend on that having happened.
+     *
+     * @return the trimmed name, or null if it is unusable.
+     */
+    fun normalizeRemote(raw: String): String? {
+        val name = raw.trim()
+        if (name.isEmpty()) return null
+        if (name.toByteArray(Charsets.UTF_8).size > MAX_BYTES) return null
+        return name
+    }
 }

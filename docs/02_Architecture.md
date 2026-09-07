@@ -244,11 +244,24 @@ app  ──────────────► core
  └─ di        ─► 以上全部（唯一允许知晓所有实现的地方）
 
 core.session   ─► core.protocol, core.domain, core.config
-core.protocol  ─► core.common, core.config
-core.domain    ─► core.common
-core.logger    ─► core.common
-core.config    ─► core.common
+core.protocol  ─► core.common, core.config, core.domain, core.logger
+core.domain    ─► core.common, core.config, core.logger
+core.logger    ─► core.common, core.config
+core.config    ─► core.common, core.logger, core.protocol
 ```
+
+`core` 内部的包依赖不是一条严格的单向链，上表如实反映实现：
+
+- `core.config` ↔ `core.logger`：`LoggingConfig` 用 `LogCategory` / `LogLevel`，
+  `Logger` 收 `LoggingConfig`。
+- `core.config` ↔ `core.protocol`：`ProtocolConfig` 的默认值取自 `WireFormat`，
+  以避免线格式常量在两处各写一遍。
+- `core.protocol` ─► `core.domain`：包头里的 `SenderDeviceId` / `TargetDeviceId`
+  就是 `DeviceId`。
+
+这些包同属 `:core` 一个 Gradle 模块，包级循环不影响编译或测试。真正被构建强制、
+并由 `ArchitectureRulesTest` 守住的边界只有两条：`:core` 不得依赖 Android，
+`:app` 单向依赖 `:core`。若将来某个包提升为独立 module，必须先拆掉对应的循环并记录 ADR。
 
 强制约束：
 
