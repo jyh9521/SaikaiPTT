@@ -52,6 +52,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 import kotlin.math.PI
 import kotlin.math.sin
@@ -318,22 +319,29 @@ private suspend fun probeSpeaker(
             val frame = ByteArray(frameSizeSamples * 2)
             var phase = 0.0
             val step = 2.0 * PI * TONE_HZ / sampleRateHz
-            var accepted = 0
-            val frames = PROBE_MILLIS / 20
+            val frames = (PROBE_MILLIS / 20).toInt()
+            var short = 0
+            var firstShort = -1
 
-            repeat(frames.toInt()) {
+            repeat(frames) { index ->
                 for (sample in 0 until frameSizeSamples) {
                     val value = (sin(phase) * TONE_AMPLITUDE).toInt().toShort()
                     frame[sample * 2] = (value.toInt() and 0xFF).toByte()
                     frame[sample * 2 + 1] = ((value.toInt() shr 8) and 0xFF).toByte()
                     phase += step
                 }
-                accepted += player.write(frame, 0, frame.size)
+                if (player.write(frame, 0, frame.size) < frame.size) {
+                    short++
+                    if (firstShort < 0) firstShort = index
+                }
                 delay(20)
             }
 
             player.stop()
-            "wrote=$accepted/${frames * frame.size}B"
+            // Where the shortfall happened is the whole answer. Once, near the
+            // start, is the device not draining until play() takes effect.
+            // Spread through the run would be a device that cannot keep up.
+            "short=$short/$frames first=$firstShort"
         }
     }
 }
@@ -351,9 +359,12 @@ private const val TONE_AMPLITUDE = 8_000.0
 private suspend fun probeMicrophone(recorder: AudioRecorder, frameSizeBytes: Int): String {
     val frames = AtomicInteger()
     val peak = AtomicInteger()
+    val firstAt = AtomicLong()
+    val lastAt = AtomicLong()
 
-    val outcome = recorder.start { pcm, offset, length, _ ->
-        frames.incrementAndGet()
+    val outcome = recorder.start { pcm, offset, length, capturedAtMillis ->
+        if (frames.getAndIncrement() == 0) firstAt.set(capturedAtMillis)
+        lastAt.set(capturedAtMillis)
         var loudest = 0
         var index = offset
         val end = offset + length - 1
@@ -374,9 +385,17 @@ private suspend fun probeMicrophone(recorder: AudioRecorder, frameSizeBytes: Int
         is Outcome.Success -> {
             delay(PROBE_MILLIS)
             recorder.stop()
-            val expected = PROBE_MILLIS / 20
+
+            val count = frames.get()
             val level = peak.get().toFloat() / Short.MAX_VALUE
-            "frames=${frames.get()}/$expected  ${frameSizeBytes}B  peak=%.2f".format(level)
+            // The span between the first and last frame, not the wall clock:
+            // opening the device takes a few tens of milliseconds, and counting
+            // that as missing frames would blame the capture loop for the
+            // hardware's start-up. What matters is the rate once it is running.
+            val spanMillis = (lastAt.get() - firstAt.get()).coerceAtLeast(0L)
+            val expectedInSpan = if (count > 1) spanMillis / 20 + 1 else count.toLong()
+            "frames=$count/$expectedInSpan span=${spanMillis}ms ${frameSizeBytes}B peak=%.2f"
+                .format(level)
         }
     }
 }
