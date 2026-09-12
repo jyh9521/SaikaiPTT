@@ -47,8 +47,6 @@ internal class RecordingSignals(private val sendSucceeds: () -> Boolean = { true
         sessionId: SessionId,
         target: DeviceId,
         endpoint: PeerEndpoint,
-        finalDataSequence: Int,
-        frameCount: Int,
     ): Boolean = record("VOICE_END $sessionId -> $target")
 
     override suspend fun sessionTerminate(

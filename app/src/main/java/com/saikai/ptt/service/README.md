@@ -55,9 +55,29 @@ Activity 类：服务必须在没有任何 Activity 存活时照常工作，那�
   是一个兑现不了的承诺，硬试的结果是一通听起来坏掉的通话，而不是一通结束了的通话。
 - **换 IP 也算一次恢复**，即使没有任何东西「丢失」。
 
+## 发送端 PTT（Task25）
+
+| 文件 | 职责 |
+|---|---|
+| `Ptt.kt` | `PttController`（按下的前置检查与前台服务类型提升）+ `PttGateway`（UI 的入口） |
+| `VoiceSessionPowerLocks.kt` | `WifiLock(FULL_LOW_LATENCY)` + 带超时的 `PARTIAL_WAKE_LOCK`，仅会话期间 |
+
+**提升在告知状态机之前**。Android 14 不允许后台把前台服务提升为 `microphone` 类型，
+所以「讲话要求界面可见」是平台规则而不是选择（ADR-005 §2、§3）。先问可见性、再提升、
+最后才 `requestTalk`：被拒绝时代价为零，麦克风也不会被一个注定失败的请求打开。
+
+平台的答复才算数。可见性检查与提升之间应用可能已经切到后台，所以提升抛出的
+`ForegroundServiceStartNotAllowedException` / `SecurityException` 不是异常路径，
+是同一个答案的另一种说法，统一变成 `SendFailure.APP_NOT_VISIBLE`。
+
+**降级由会话状态驱动，不由按键驱动**（见 `app.session.VoiceSessionCoordinator`）。
+松手只是七条结束路径之一，而一个讲完话仍声明 `microphone` 的服务会让状态栏的麦克风
+指示灯一直亮着。
+
+电源锁同理，而且 wake lock 带 5 分钟超时。超时不是保险丝而是最后一道防线：一个进程
+如果没跑完自己的释放路径，能注意到的只有平台。
+
 ## 待实现
 
 - 正式通知与操作按钮（Task31）
-- 按住 PTT 时提升为 `microphone` 类型（Task25）
-- `WifiLock` / `PARTIAL_WAKE_LOCK`，仅语音会话期间（ADR-005 §6）
 - 开机自启（`BOOT_COMPLETED` → `connectedDevice`）

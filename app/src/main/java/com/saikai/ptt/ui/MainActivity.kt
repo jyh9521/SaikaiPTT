@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +46,7 @@ import com.saikai.ptt.core.domain.AppLanguage
 import com.saikai.ptt.core.domain.AudioPlayer
 import com.saikai.ptt.core.domain.AudioRecorder
 import com.saikai.ptt.core.domain.Peer
+import com.saikai.ptt.core.session.SessionState
 import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.service.CommunicationService
 import com.saikai.ptt.service.ServiceState
@@ -92,6 +95,7 @@ class MainActivity : ComponentActivity() {
 
                 val serviceState by container.serviceStatus.state.collectAsState()
                 val peers by container.serviceStatus.peers.collectAsState()
+                val session by container.serviceStatus.session.collectAsState()
                 val activeUser by container.localUsers.activeUser.collectAsState(initial = null)
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -100,6 +104,14 @@ class MainActivity : ComponentActivity() {
                         serviceState = serviceState,
                         peers = peers,
                         activeUserName = activeUser?.displayName,
+                        session = session,
+                        onTalkPress = { peer ->
+                            when (val outcome = container.ptt.press(peer)) {
+                                is Outcome.Success -> ""
+                                is Outcome.Failure -> outcome.error.name
+                            }
+                        },
+                        onTalkRelease = { container.ptt.release() },
                         onSetName = { name ->
                             val current = container.localUsers.activeUser.first()
                             if (current == null) {
@@ -149,6 +161,9 @@ private fun PlaceholderScreen(
     serviceState: ServiceState,
     peers: List<Peer>,
     activeUserName: String?,
+    session: SessionState,
+    onTalkPress: suspend (Peer) -> String,
+    onTalkRelease: suspend () -> Unit,
     onProbeMicrophone: suspend () -> String,
     onProbeSpeaker: suspend () -> String,
     onSetName: suspend (String) -> Unit,
@@ -158,6 +173,7 @@ private fun PlaceholderScreen(
 ) {
     val scope = rememberCoroutineScope()
     var nameDraft by remember(activeUserName) { mutableStateOf(activeUserName.orEmpty()) }
+    var talkError by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier.fillMaxSize().padding(24.dp),
@@ -229,16 +245,89 @@ private fun PlaceholderScreen(
             SpeakerProbe(onProbe = onProbeSpeaker)
 
             Text(
+                text = "${stringResource(R.string.placeholder_session_label)}: " +
+                    session.javaClass.simpleName + talkError,
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Text(
                 text = "${stringResource(R.string.placeholder_peers_label)} (${peers.size})",
                 style = MaterialTheme.typography.labelMedium,
             )
             peers.forEach { peer ->
-                Text(
-                    text = "${peer.userName}  ${peer.state}  ${peer.endpoint}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${peer.userName}  ${peer.state}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TalkButton(
+                        peer = peer,
+                        onPress = { talkError = onTalkPress(it).let { e -> if (e.isEmpty()) "" else "  $e" } },
+                        onRelease = onTalkRelease,
+                    )
+                }
             }
         }
+    }
+}
+
+/**
+ * Press and hold to talk, for as long as the finger is down.
+ *
+ * Debug only, and the only way Task25 can be accepted: two devices, A holds the
+ * button, B hears it. `detectTapGestures` rather than a click, because the whole
+ * behaviour under test is what happens between the press and the release --
+ * including that letting go ends the session even if the peer never answered.
+ *
+ * The permission request is here rather than at start-up because Task34 owns
+ * onboarding; without it the very first press on a fresh install would fail with
+ * MIC_UNAVAILABLE and look like a bug in the pipeline.
+ */
+@Composable
+private fun TalkButton(
+    peer: Peer,
+    onPress: suspend (Peer) -> Unit,
+    onRelease: suspend () -> Unit,
+) {
+    val context = LocalContext.current
+    var granted by remember {
+        mutableStateOf(
+            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val request = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted = it }
+
+    val interactions = remember { MutableInteractionSource() }
+
+    // Press and release rather than click, because the whole behaviour under
+    // test lives between them -- including that letting go ends the session even
+    // if the peer never answered. Reading them off the interaction source is
+    // what a Material button already publishes; a competing pointer handler on
+    // the same button would be racing the button's own.
+    LaunchedEffect(interactions, granted) {
+        if (!granted) return@LaunchedEffect
+        interactions.interactions.collect { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> onPress(peer)
+                is PressInteraction.Release, is PressInteraction.Cancel -> onRelease()
+                else -> Unit
+            }
+        }
+    }
+
+    OutlinedButton(
+        // The permission prompt is here rather than at start-up because
+        // onboarding is Task34. Without it the first press on a fresh install
+        // fails with MIC_UNAVAILABLE and looks like a bug in the pipeline.
+        onClick = { if (!granted) request.launch(Manifest.permission.RECORD_AUDIO) },
+        interactionSource = interactions,
+    ) {
+        Text(stringResource(R.string.placeholder_talk))
     }
 }
 
@@ -415,6 +504,9 @@ private fun PlaceholderScreenPreview() {
             serviceState = ServiceState.STOPPED,
             peers = emptyList(),
             activeUserName = null,
+            session = SessionState.Idle,
+            onTalkPress = { "" },
+            onTalkRelease = {},
             onProbeMicrophone = { "" },
             onProbeSpeaker = { "" },
             onSetName = {},

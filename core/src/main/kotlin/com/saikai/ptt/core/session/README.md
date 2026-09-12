@@ -43,9 +43,32 @@ PTT 会话状态机：发送端 IDLE→REQUESTING→TRANSMITTING→ENDING，
 
 ### 待接入
 
-音频（Task22–26）、历史记录消费 `outcomes`（Task27）、以及把这台机器接到传输层与 UI 上。
-本任务按计划只做状态机，用 fake 验证。
+历史记录消费 `outcomes`（Task27）、接收端音频与 jitter buffer（Task26）。
 
-`release()` 与 `terminate()` 里 `voiceEnd(..., 0, 0)` 的两个零由 **Task25** 填上。数字本身
-已经有了——`core.protocol.VoicePacketizer`（Task24）数着它写出去的每一帧——但会话机不持有
-打包器，从这里伸手去拿等于让状态机知道缓冲区和编解码器的存在。发送管线两样都持有，由它接。
+## 已实现（Task25）
+
+| 文件 | 职责 |
+|---|---|
+| `DatagramSink.kt` | 发送管线与 socket 之间唯一的接缝 |
+| `VoiceFrameBuffer.kt` | 等待应答期间捕获的帧，有界环形，满了丢最旧 |
+| `VoiceRecording.kt` | 录音钩子的四个时刻，Task38 之前是 `NoVoiceRecording` |
+| `VoiceTransmitter.kt` | 发送管线本体，同时也是状态机的 `SessionSignals` 实现 |
+
+**发送管线放在 core，不放在 app**。它需要的东西——打包器、编解码器接口、配置——全在 core，
+唯一属于平台的是「把这些字节发出去」，那就是 `DatagramSink`。这样「按下即录的音频是否按
+捕获顺序发出」这类问题能在 JVM 上被断言，而不是靠两台手机在一个房间里试。
+
+**`SessionSignals.voiceEnd` 去掉了两个参数**。VOICE_END 要带最后一帧的序号与帧数
+（ADR-003 §4），而这两个数只有真正发出这些帧的对象知道：状态机不数帧，被编码器拒绝或被
+socket 丢掉的帧从来没有变成过序号。从上面传下来只能是猜的——那正是这两个位置在发送管线
+存在之前一直是 `0, 0` 的原因。
+
+**一个 collector，不是四个订阅**。发送管线要知道对方何时接受、电源锁要知道会话是否存在、
+前台服务类型要在讲话期间带上 `microphone`、UI 要看到状态。会话结束的路径有七条（松手、
+BUSY、无应答、被强插、WiFi 掉线、来电抢焦点、服务停止），四个订阅就是四次漏掉其中一条的
+机会，而漏掉留下的是一个没释放的 wake lock，或者一直亮着的麦克风指示灯。见
+`app.session.VoiceSessionCoordinator`。
+
+**每次发送新建编解码器**。`VoiceCodec` 在帧之间携带状态，而对端每接受一个会话都会新建
+解码器；沿用上次发送的编码器等于用对端从未见过的历史做预测，而解错的恰恰是最前面几帧
+——正是预滚缓冲要保护的那几帧。

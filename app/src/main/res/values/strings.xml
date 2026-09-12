@@ -28,6 +28,8 @@
     <string name="placeholder_peers_label">端末</string>
     <string name="placeholder_service_start">開始</string>
     <string name="placeholder_service_stop">停止</string>
+    <string name="placeholder_talk">押して話す</string>
+    <string name="placeholder_session_label">セッション</string>
 
     <!-- Ongoing foreground-service notification. Replaced in Task31. -->
     <string name="notification_channel_communication">通信</string>

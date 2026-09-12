@@ -39,12 +39,21 @@ interface SessionSignals {
     /** Carries no session id: the request was refused, so none was created. */
     suspend fun busy(target: DeviceId, endpoint: PeerEndpoint): Boolean
 
+    /**
+     * Ends the transmission.
+     *
+     * VOICE_END carries the last frame's sequence number and the frame count
+     * (ADR-003 section 4), and neither is a parameter here on purpose. They
+     * describe the frames that actually went out, which only the implementation
+     * knows: the state machine counts no frames, and a frame the codec refused
+     * or the socket dropped never became a sequence number. Passing them from
+     * above would mean passing a guess, which is what the two zeroes here were
+     * until the send pipeline existed.
+     */
     suspend fun voiceEnd(
         sessionId: SessionId,
         target: DeviceId,
         endpoint: PeerEndpoint,
-        finalDataSequence: Int,
-        frameCount: Int,
     ): Boolean
 
     suspend fun sessionTerminate(

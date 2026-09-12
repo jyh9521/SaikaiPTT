@@ -1,6 +1,7 @@
 package com.saikai.ptt.service
 
 import com.saikai.ptt.core.domain.Peer
+import com.saikai.ptt.core.session.SessionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,8 +38,24 @@ class ServiceStatus {
      */
     val peers: StateFlow<List<Peer>> = _peers.asStateFlow()
 
+    private val _session = MutableStateFlow<SessionState>(SessionState.Idle)
+
+    /**
+     * What the session machine is doing, mirrored out of service scope.
+     *
+     * Idle whenever the service is not running, which is true rather than
+     * merely convenient: there is no machine, so there is no session. The UI
+     * reads this to know whether the talk button is pressed, waiting or live
+     * without holding a reference to anything owned by the service.
+     */
+    val session: StateFlow<SessionState> = _session.asStateFlow()
+
     fun publishPeers(peers: List<Peer>) {
         _peers.value = peers
+    }
+
+    fun publishSession(state: SessionState) {
+        _session.value = state
     }
 
     fun publish(state: ServiceState) {

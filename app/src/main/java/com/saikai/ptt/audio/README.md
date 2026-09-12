@@ -44,6 +44,15 @@ buffer ≥ 4 帧、专用线程 `THREAD_PRIORITY_URGENT_AUDIO`、每帧零分配
 之前申请、打不开就立刻归还**——被拒绝的麦克风绝不能让本应用攥着音频焦点，那等于
 白白掐掉用户的音乐。
 
+## 接入发送管线（Task25）
+
+`AndroidVoiceAudio` 的 `frames` 直接就是 `core.session.VoiceTransmitter::onPcmFrame`
+——采集线程与编码器之间没有队列，也就没有需要调的参数。一帧是被缓冲还是被发送由
+发送管线决定，因为那是会话的性质，不是麦克风的性质。
+
+编解码器**每次发送新建一个**（`ServiceContainer.newCodec`）。理由写在
+`core.session.VoiceTransmitter` 与 `core.session/README.md` 里。
+
 ## 待实现
 
-Opus 编解码（Task22/23）、发送与接收管线（Task24/25）、jitter buffer（Task26）。
+jitter buffer 与接收播放管线（Task26）。

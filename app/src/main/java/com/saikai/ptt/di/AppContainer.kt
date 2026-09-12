@@ -9,7 +9,9 @@ import com.saikai.ptt.core.domain.StoredDeviceIdentityProvider
 import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.locale.LocaleController
+import com.saikai.ptt.AppVisibility
 import com.saikai.ptt.logging.AndroidLogSink
+import com.saikai.ptt.service.PttGateway
 import com.saikai.ptt.service.ServiceStatus
 
 /**
@@ -90,6 +92,27 @@ class AppContainer(
      * bind to.
      */
     val serviceStatus: ServiceStatus = ServiceStatus()
+
+    /**
+     * Whether a screen of this app is on display.
+     *
+     * Application scope because the *service* asks the question and the service
+     * outlives every Activity. Android 14 will not promote a foreground service
+     * to the `microphone` type from the background, which makes "transmitting
+     * requires a visible screen" a platform rule (ADR-005 sections 2 and 3);
+     * asking first turns it into a clear refusal instead of an exception at the
+     * moment the user presses the talk button.
+     */
+    val visibility: AppVisibility = AppVisibility()
+
+    /**
+     * The talk button, when there is a service behind it.
+     *
+     * Application scope holding a service-scope object, for the same reason
+     * [serviceStatus] exists: a screen can open with no service running, and
+     * "nothing to press yet" has to be an answer rather than a crash.
+     */
+    val ptt: PttGateway = PttGateway()
 
     /**
      * Interface language. Application scope because notifications and the

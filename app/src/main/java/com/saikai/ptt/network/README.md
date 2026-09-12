@@ -50,3 +50,9 @@ UDP socket 与接收循环。两个 socket、两条接收线程，按 `docs/ADR/
 
 `NetworkLink` 带 IPv4 地址列表，因为**网络可以在一次 DHCP 换网段中始终「可用」**，
 而所有对端关于「往哪儿发语音」的认知同时全部作废，却没有任何一个回调说丢过东西。
+
+## 发送适配（Task25）
+
+`UdpDatagramSink` 实现 `core.session.DatagramSink`：把对端地址字符串解析成 `InetAddress`、
+选通道，仅此而已。控制包永远发往 ADR-002 固定的那个端口，只有语音端口是浮动的——因为
+那是对端自己通告的。值得测的东西全在接缝的另一侧（`core.session.VoiceTransmitter`）。

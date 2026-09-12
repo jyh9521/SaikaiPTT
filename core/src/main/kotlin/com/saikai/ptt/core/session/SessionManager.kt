@@ -156,15 +156,6 @@ class SessionManager(
                         sessionId = current.sessionId,
                         target = current.peer,
                         endpoint = current.endpoint,
-                        // Zero until Task25. The numbers exist -- a
-                        // `VoicePacketizer` (Task24) counts every frame it
-                        // writes and reports `finalDataSequence` and
-                        // `framesSent` -- but the machine does not own one, and
-                        // reaching for it from here would mean the state machine
-                        // knew about buffers and codecs. The sender pipeline
-                        // owns both and joins them.
-                        finalDataSequence = 0,
-                        frameCount = 0,
                     )
                     audio.stopCapture()
                     finish(SessionOutcome.SendEnded(
@@ -197,9 +188,7 @@ class SessionManager(
             } else {
                 audio.stopCapture()
                 if (current is SessionState.Transmitting) {
-                    signals.voiceEnd(
-                        current.sessionId, current.peer, current.endpoint, 0, 0,
-                    )
+                    signals.voiceEnd(current.sessionId, current.peer, current.endpoint)
                 }
                 finish(interrupted(current, reason))
             }
@@ -539,9 +528,7 @@ class SessionManager(
                     if (current.sessionId != sessionId) return@launch
                     if (nowMillis() - current.startedAtMillis < maxMillis) return@withLock
 
-                    signals.voiceEnd(
-                        current.sessionId, current.peer, current.endpoint, 0, 0,
-                    )
+                    signals.voiceEnd(current.sessionId, current.peer, current.endpoint)
                     audio.stopCapture()
                     finish(interrupted(current, TerminationReason.TIMEOUT))
                     return@launch

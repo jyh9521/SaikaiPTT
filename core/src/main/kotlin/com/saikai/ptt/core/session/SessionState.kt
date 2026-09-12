@@ -91,6 +91,19 @@ enum class SendFailure {
     /** The microphone could not be opened. */
     MIC_UNAVAILABLE,
 
+    /**
+     * The app's UI is not on screen, so it may not use the microphone.
+     *
+     * Not a bug and not a permission problem: Android 14 forbids promoting a
+     * foreground service to the `microphone` type from the background, which
+     * makes "transmitting requires a visible screen" a platform rule rather
+     * than a choice (ADR-005 sections 2 and 3, `docs/01_PRD.md` section 10.5).
+     * Distinct from [MIC_UNAVAILABLE] because the remedy is different -- open
+     * the app, rather than end whatever call is holding the microphone -- and
+     * because the two are told apart before the microphone is even touched.
+     */
+    APP_NOT_VISIBLE,
+
     /** The datagram could not be handed to the network at all. */
     UNREACHABLE,
 

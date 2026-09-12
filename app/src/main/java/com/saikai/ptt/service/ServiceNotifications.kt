@@ -79,11 +79,46 @@ class ServiceNotifications(private val context: Context) {
      * notification.
      */
     fun startForeground(service: Service) {
-        service.startForeground(
-            ONGOING_ID,
-            ongoing(),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-        )
+        service.startForeground(ONGOING_ID, ongoing(), RESIDENT_TYPE)
+    }
+
+    /**
+     * Adds `microphone` to the running service's types, for the length of one
+     * transmission (ADR-005 section 2).
+     *
+     * Android 14 forbids this promotion from the background, and the refusal
+     * arrives as an exception rather than a return value:
+     * `ForegroundServiceStartNotAllowedException` (an `IllegalStateException`)
+     * when the app is not foreground, and a `SecurityException` when it has no
+     * while-in-use access to the microphone. Both mean the same thing to the
+     * caller -- this device may not transmit right now -- so both become false
+     * rather than an exception thrown out of a button press.
+     *
+     * The caller checks visibility first, so this is the backstop rather than
+     * the check: the two can disagree, because the app can be backgrounded
+     * between the question and the answer.
+     *
+     * @return true when the service is running as a microphone service.
+     */
+    fun promoteToMicrophone(service: Service): Boolean = setType(service, TRANSMITTING_TYPE)
+
+    /**
+     * Drops back to the resident type.
+     *
+     * Called on every path out of a transmission, not only on the button coming
+     * up. A service left declaring `microphone` after the user stopped talking
+     * keeps the microphone indicator lit in the status bar, which is an
+     * unambiguous claim to the user that the app is listening to them.
+     */
+    fun demoteFromMicrophone(service: Service): Boolean = setType(service, RESIDENT_TYPE)
+
+    private fun setType(service: Service, type: Int): Boolean = try {
+        service.startForeground(ONGOING_ID, ongoing(), type)
+        true
+    } catch (_: IllegalStateException) {
+        false
+    } catch (_: SecurityException) {
+        false
     }
 
     /**
@@ -111,5 +146,14 @@ class ServiceNotifications(private val context: Context) {
     companion object {
         const val CHANNEL_ID: String = "saikai.communication"
         const val ONGOING_ID: Int = 1
+
+        /** What the service declares while it is only discovering and receiving. */
+        private const val RESIDENT_TYPE: Int =
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+
+        /** What it declares while the talk button is held. */
+        private const val TRANSMITTING_TYPE: Int =
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
     }
 }

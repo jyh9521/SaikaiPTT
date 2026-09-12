@@ -7,6 +7,7 @@ import android.os.IBinder
 import com.saikai.ptt.SaikaiApplication
 import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.logger.LogCategory
+import com.saikai.ptt.core.protocol.TerminationReason
 import com.saikai.ptt.di.ServiceContainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -120,6 +121,7 @@ class CommunicationService : Service() {
             app = app,
             localDeviceId = deviceId,
             notifications = notifications,
+            scope = scope,
             onBound = { ports ->
                 app.logger.i(LogCategory.SERVICE) {
                     "listening on control ${ports.controlPort}, voice ${ports.voicePort}"
@@ -149,9 +151,19 @@ class CommunicationService : Service() {
                     peers = serviceContainer.peers,
                     logger = app.logger,
                     firstNetworkStep = serviceContainer.firstNetworkStep,
-                    // Task19 supplies the session machine's own teardown here.
-                    onNetworkLost = { serviceContainer.setBusy(false) },
+                    // A voice session does not survive the network going away
+                    // (ADR-005, `docs/03_Protocol.md` section 41). Ending it is
+                    // not the same as letting it stop: the recording is
+                    // finalised as INTERRUPTED and the peer stops waiting,
+                    // instead of a call that trails off.
+                    onNetworkLost = {
+                        serviceContainer.sessions.terminate(TerminationReason.NETWORK_LOST)
+                    },
                 ).also { it.start(scope) }
+
+                // The talk button is reachable from the UI only while a service
+                // is actually running behind it.
+                app.ptt.attach(serviceContainer.ptt)
             }
             is Outcome.Failure -> {
                 // Everything the sequence started has already been released.
@@ -165,6 +177,7 @@ class CommunicationService : Service() {
     }
 
     private suspend fun shutdown(): Unit = mutex.withLock {
+        (application as? SaikaiApplication)?.container?.ptt?.detach()
         peerMirror?.cancel()
         peerMirror = null
         // Before the lifecycle: a recovery that fired mid-shutdown would try to

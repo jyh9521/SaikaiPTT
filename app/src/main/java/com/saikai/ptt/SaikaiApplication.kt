@@ -25,4 +25,16 @@ class SaikaiApplication : Application() {
             },
         )
     }
+
+    /**
+     * Starts counting visible Activities.
+     *
+     * Eagerly, unlike the container itself: the count has to be right from the
+     * first Activity, and a lazy observer would report "nothing on screen" for
+     * whatever came before it. It costs one object and two callbacks.
+     */
+    override fun onCreate() {
+        super.onCreate()
+        container.visibility.register(this)
+    }
 }

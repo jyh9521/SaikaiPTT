@@ -46,7 +46,7 @@ class NetworkRecovery(
     private val logger: Logger,
     /** The first step that depends on the network. Everything from here is cycled. */
     private val firstNetworkStep: String,
-    /** Ends any voice session. Supplied by the session machine in Task19. */
+    /** Ends any voice session. Wired to the session machine in Task25. */
     private val onNetworkLost: suspend () -> Unit = {},
 ) {
 
