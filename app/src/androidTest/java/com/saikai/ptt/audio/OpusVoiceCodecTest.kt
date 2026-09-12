@@ -133,11 +133,21 @@ class OpusVoiceCodecTest {
         // Find the codec's delay, then judge the audio with it removed. Opus is
         // not waveform preserving and never claimed to be; what it preserves is
         // the signal, delayed.
-        val window = config.audio.sampleRateHz
+        //
+        // Both loops read `decoded[index + lag]`, so the window has to stop
+        // MAX_LAG short of the end of the buffer -- MAX_LAG, not the lag that
+        // was actually measured, so that the number of samples behind the
+        // correlation and the SNR does not depend on the delay they found. A
+        // threshold is only worth having if it means the same thing every run.
+        val windowStart = config.audio.sampleRateHz
+        val windowEnd = pcm.size - MAX_LAG
+        val windowLength = windowEnd - windowStart
+        assertTrue("FRAMES is too small to measure anything", windowLength > MAX_LAG * 4)
+
         var bestLag = 0
         var bestCorrelation = -1.0
         for (lag in 0..MAX_LAG) {
-            val correlation = correlate(pcm, decoded, window, window, lag)
+            val correlation = correlate(pcm, decoded, windowStart, windowLength, lag)
             if (correlation > bestCorrelation) {
                 bestCorrelation = correlation
                 bestLag = lag
@@ -146,7 +156,7 @@ class OpusVoiceCodecTest {
 
         var error = 0.0
         var signal = 0.0
-        for (index in window until window * 2) {
+        for (index in windowStart until windowEnd) {
             val difference = (pcm[index] - decoded[index + bestLag]).toDouble()
             error += difference * difference
             signal += pcm[index].toDouble() * pcm[index]

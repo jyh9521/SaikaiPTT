@@ -41,6 +41,67 @@ set(OPUS_ENABLE_FLOAT_API OFF CACHE BOOL "" FORCE)
 
 add_subdirectory("${OPUS_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/opus" EXCLUDE_FROM_ALL)
 
+# --- Upstream defect: libopus v1.6.1 + CMake + ARM + fixed point never links ---
+#
+# The failure is `undefined symbol: celt_pitch_xcorr_neon`, on both arm64-v8a and
+# armeabi-v7a. The chain, all line numbers in the pinned v1.6.1 tree:
+#
+#   * celt/arm/pitch_arm.h declares celt_pitch_xcorr_neon inside
+#     `#if defined(FIXED_POINT)` / `#if defined(OPUS_ARM_MAY_HAVE_NEON)`, and
+#     celt/arm/arm_celt_map.c puts MAY_HAVE_NEON(celt_pitch_xcorr) into the
+#     runtime-dispatch table under the same macro.
+#   * The only definition of that symbol is hand-written assembly, in
+#     celt/arm/celt_pitch_xcorr_arm.s.
+#   * cmake/OpusSources.cmake reads that file into CELT_SOURCES_ARM_ASM, and
+#     nothing in the CMake build ever uses that variable. The autotools build
+#     runs it through arm2gnu.pl and assembles it; the CMake build does not.
+#   * CMakeLists.txt nevertheless defines OPUS_ARM_MAY_HAVE_NEON, and
+#     cmake/OpusConfig.cmake force-sets OPUS_PRESUME_NEON ON for aarch64 with a
+#     plain set(), so turning the OPUS_MAY_HAVE_NEON option off does not help:
+#     pitch_arm.h's PRESUME branch recreates the same reference.
+#
+# So the reference exists and the definition cannot. This is only reachable with
+# OPUS_FIXED_POINT=ON -- the float build routes celt_pitch_xcorr through NEON
+# *intrinsics* instead -- and fixed point is a deliberate choice here (ADR-007).
+#
+# The fix strips exactly the two assembly-flavoured macros off the opus target and
+# leaves the _INTR spellings alone. That is what keeps this cheap: every NEON
+# intrinsics path stays compiled in -- xcorr_kernel_neon_fixed, celt_inner_prod,
+# dual_inner_prod, and the SILK NSQ / NSQ_del_dec / biquad / LPC_inv_pred_gain /
+# warped-autocorrelation kernels -- and runtime CPU detection in celt/arm/armcpu.c
+# stays on, because every guard there also tests OPUS_ARM_MAY_HAVE_NEON_INTR.
+# Only celt_pitch_xcorr itself drops to its C implementation, which upstream keeps
+# bit-identical to the assembly by contract.
+#
+# Rejected: OPUS_DISABLE_INTRINSICS=ON, which links but gives up all NEON, and on
+# the MTK P22 reference device that is not a rounding error; and switching to the
+# float build, which contradicts ADR-004 and ADR-007.
+#
+# Revisit when the submodule is bumped: if upstream ever assembles the .s file
+# under CMake, delete this block and the NEON assembly comes back for free.
+get_target_property(SAIKAI_OPUS_DEFINITIONS opus COMPILE_DEFINITIONS)
+if(SAIKAI_OPUS_DEFINITIONS)
+    # REMOVE_ITEM is exact-match, so OPUS_ARM_MAY_HAVE_NEON_INTR and
+    # OPUS_ARM_PRESUME_NEON_INTR survive. That is the whole point.
+    list(REMOVE_ITEM SAIKAI_OPUS_DEFINITIONS
+         OPUS_ARM_MAY_HAVE_NEON
+         OPUS_ARM_PRESUME_NEON)
+    set_property(TARGET opus PROPERTY COMPILE_DEFINITIONS ${SAIKAI_OPUS_DEFINITIONS})
+    message(STATUS "saikai: opus compile definitions -> ${SAIKAI_OPUS_DEFINITIONS}")
+endif()
+
+# --- Optimise libopus even in a debug build ------------------------------------
+#
+# opus_decoder.c raises `#warning You appear to be compiling without optimization,
+# if so opus will be very slow.` in every debug build, and it means it. The debug
+# APK is what gets installed on the test phones, and an unoptimised fixed-point
+# encoder on a low-end device can miss the 20 ms frame budget outright -- which
+# would show up as stuttering audio and get diagnosed as a network or a capture
+# bug rather than as a build setting. Only the codec is affected; opus_jni.c and
+# the rest of the app keep the build type's own flags, so breakpoints still work
+# everywhere we actually debug.
+set_property(TARGET opus APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-O2>)
+
 add_library(saikaiopus SHARED opus_jni.c)
 
 target_link_libraries(saikaiopus PRIVATE opus)

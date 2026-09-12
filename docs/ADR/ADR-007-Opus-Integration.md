@@ -132,7 +132,7 @@ inband FEC 开、DTX 关，外加两项 ADR-004 没有写出但必需的：
 
 耗时数据来自云端 x86-64，只作数量级参考，真机复核见下。
 
-## 发现（两项，均需记录）
+## 发现（四项，均需记录）
 
 ### 1. 只开 `OPUS_SET_INBAND_FEC` 不会产生任何冗余
 
@@ -153,6 +153,65 @@ inband FEC 开、DTX 关，外加两项 ADR-004 没有写出但必需的：
 走 libopus 自己的丢包隐藏（`len=0`），它比插静音更好且开销相同。**是否启用、以及
 抖动缓冲如何调用它们，是 Task26 的决定**，本 ADR 只保证能力存在且已验证可用。
 
+### 3. libopus v1.6.1 的 CMake 构建在 ARM + 定点下必然链接失败（上游缺陷）
+
+第一次真机构建在 `arm64-v8a` 和 `armeabi-v7a` 上同时失败：
+
+```
+ld.lld: error: undefined symbol: celt_pitch_xcorr_neon
+```
+
+不是配置写错，是上游缺陷，而且**只有选了 `OPUS_FIXED_POINT=ON` 才会踩到**——
+浮点构建的 `celt_pitch_xcorr` 走的是 NEON **intrinsics**，不碰这个符号。链条：
+
+| 位置 | 内容 |
+|---|---|
+| `celt/arm/pitch_arm.h:71` | 在 `FIXED_POINT` 且 `OPUS_ARM_MAY_HAVE_NEON` 下**声明** `celt_pitch_xcorr_neon` |
+| `celt/arm/arm_celt_map.c:88` | 同一宏下把它填进运行时分发表 |
+| `celt/arm/celt_pitch_xcorr_arm.s` | 该符号**唯一的定义**，手写汇编 |
+| `cmake/OpusSources.cmake:36` | 把这个 `.s` 读进 `CELT_SOURCES_ARM_ASM`，**而这个变量在整个 CMake 构建里再没被用过** |
+| `CMakeLists.txt:573` | 却照样定义 `OPUS_ARM_MAY_HAVE_NEON` |
+| `cmake/OpusConfig.cmake:77` | 对 aarch64 用裸 `set()` 强制 `OPUS_PRESUME_NEON ON` |
+
+autotools 构建用 `arm2gnu.pl` 转译并汇编这个 `.s`，CMake 构建没有这一步。于是
+**引用存在、定义不可能存在**。最后一行还意味着：仅把 `OPUS_MAY_HAVE_NEON` 选项关掉
+无济于事——`pitch_arm.h:99` 的 `OPUS_ARM_PRESUME_NEON` 分支会把同一个引用再造出来。
+
+处理（`app/src/main/cpp/CMakeLists.txt`，`add_subdirectory` 之后）：从 `opus` 目标的
+`COMPILE_DEFINITIONS` 里精确移除 `OPUS_ARM_MAY_HAVE_NEON` 与 `OPUS_ARM_PRESUME_NEON`
+两个宏。`list(REMOVE_ITEM)` 是全等匹配，`_INTR` 拼写的两个宏原样保留——**这正是这个
+修法便宜的原因**：
+
+- 全部 NEON intrinsics 路径继续编译进来：`xcorr_kernel_neon_fixed`、
+  `celt_inner_prod`、`dual_inner_prod`，以及 SILK 的 NSQ、NSQ_del_dec、biquad、
+  LPC_inv_pred_gain、warped autocorrelation；
+- `celt/arm/armcpu.c` 的运行时 CPU 检测继续工作，它每一处判断都同时测
+  `OPUS_ARM_MAY_HAVE_NEON_INTR`；
+- 只有 `celt_pitch_xcorr` 一个函数退回 C 实现，而上游按约定保证它与汇编版**逐位一致**。
+
+已否决的替代方案：`OPUS_DISABLE_INTRINSICS=ON` 能链接，但等于放弃全部 NEON，在 MTK
+P22 上这不是舍入误差；改用浮点构建与 `ADR-004`、本 ADR 的理由直接冲突。
+
+该改动带注释写在 CMake 文件里，并注明：将来若上游在 CMake 下汇编了那个 `.s`，删掉这
+一段即可自动恢复汇编版本。
+
+### 4. Debug 构建会把 libopus 编成 `-O0`
+
+同一份构建日志里还有一条被淹没的警告：
+
+```
+opus_decoder.c:38: warning: You appear to be compiling without optimization,
+if so opus will be very slow.
+```
+
+它说的是实话。装到测试机上的正是 debug APK，而一个未优化的定点编码器在低端设备上
+完全可能直接吃满 20 ms 帧预算——表现出来是断续的声音，然后会被当成网络或采集的 bug
+去查，而不是一个构建开关。
+
+处理：`set_property(TARGET opus APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-O2>)`。
+只作用于编解码器；`opus_jni.c` 和整个 app 仍用构建类型自己的参数，真正需要下断点的
+地方不受影响。
+
 ## 尚待真机复核
 
 以下三项无法在开发沙箱内完成，必须在真实构建产物上核对，结果补记于本节：
@@ -170,6 +229,9 @@ inband FEC 开、DTX 关，外加两项 ADR-004 没有写出但必需的：
 - 首次 clone 后必须执行 `git submodule update --init --recursive`。CMake 在配置阶段
   会检查并直接打印这条命令，不给出难懂的报错。
 - 构建机需安装 **NDK**（建议 r28+）与 **CMake 3.22.1**（AGP 会按需下载 CMake）。
+- `app/src/main/cpp/CMakeLists.txt` 携带一处针对 libopus v1.6.1 的上游缺陷绕行
+  （见「发现 3」）。**每次升级 submodule 都必须复核它是否仍然必要、以及是否仍然
+  正确**——上游一旦修好，这段代码就会变成默默削弱 NEON 的死代码。
 - `ADR-004 §1` 的 FEC 条目应理解为「FEC + 非零期望丢包率」；`§4` 的「插入静音帧」
   被 libopus 自带的丢包隐藏取代，最终行为由 Task26 确定。
 - 若将来必须更换编解码器，接缝是 `core.domain.VoiceCodec`（Task22），其中不含任何
