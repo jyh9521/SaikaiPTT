@@ -43,5 +43,9 @@ PTT 会话状态机：发送端 IDLE→REQUESTING→TRANSMITTING→ENDING，
 
 ### 待接入
 
-音频（Task22–26）、VOICE_DATA 收发（Task24）、历史记录消费 `outcomes`（Task27）、
-以及把这台机器接到传输层与 UI 上。本任务按计划只做状态机，用 fake 验证。
+音频（Task22–26）、历史记录消费 `outcomes`（Task27）、以及把这台机器接到传输层与 UI 上。
+本任务按计划只做状态机，用 fake 验证。
+
+`release()` 与 `terminate()` 里 `voiceEnd(..., 0, 0)` 的两个零由 **Task25** 填上。数字本身
+已经有了——`core.protocol.VoicePacketizer`（Task24）数着它写出去的每一帧——但会话机不持有
+打包器，从这里伸手去拿等于让状态机知道缓冲区和编解码器的存在。发送管线两样都持有，由它接。
