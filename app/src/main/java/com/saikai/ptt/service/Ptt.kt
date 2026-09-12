@@ -8,6 +8,9 @@ import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.core.protocol.SessionId
 import com.saikai.ptt.core.session.SendFailure
 import com.saikai.ptt.core.session.SessionManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * The talk button, as everything below the UI sees it.
@@ -25,6 +28,28 @@ import com.saikai.ptt.core.session.SessionManager
  * Dropping back to the resident type is deliberately not done here. It belongs
  * to whatever watches the session state, because "the user let go" is only one
  * of the ways a transmission ends.
+ *
+ * ### Both methods leave the caller's thread, and finish
+ *
+ * Nothing below this suspends. `SessionSignals` is called while the mutex that
+ * arbitrates session ownership is held, so its implementations must not -- and
+ * the test suite asserts they do not. The consequence is that the whole chain
+ * runs on whichever thread called it, and one link in that chain is a datagram
+ * send. A talk button is pressed on the main thread, and Android kills a process
+ * that touches a socket there.
+ *
+ * So the dispatcher is imposed here rather than at the call site. This is the
+ * one door the UI comes through -- the debug screen today, the real button in
+ * Task32, the overlay in Task36 -- and leaving it to each of them would be
+ * leaving the same trap set three times.
+ *
+ * [NonCancellable] as well, and not as a precaution. A press cancelled partway
+ * has already opened the microphone and not yet entered a session, and nothing
+ * will ever close it; a cancelled release leaves the microphone open and the
+ * peer waiting for audio that has stopped. Both are reachable, because a
+ * `LaunchedEffect` is cancelled whenever its keys change or its composable
+ * leaves. Neither call contains an unbounded wait, so running them to completion
+ * costs milliseconds.
  */
 class PttController(
     private val service: Service,
@@ -35,7 +60,17 @@ class PttController(
 ) {
 
     /** The talk button went down. */
-    suspend fun press(peer: Peer): Outcome<SessionId, SendFailure> {
+    suspend fun press(peer: Peer): Outcome<SessionId, SendFailure> =
+        withContext(Dispatchers.Default + NonCancellable) { pressOffTheCallersThread(peer) }
+
+    /** The talk button came up. */
+    suspend fun release() {
+        withContext(Dispatchers.Default + NonCancellable) { sessions.release() }
+    }
+
+    private suspend fun pressOffTheCallersThread(
+        peer: Peer,
+    ): Outcome<SessionId, SendFailure> {
         if (!visibility()) {
             logger.i(LogCategory.SESSION) { "not transmitting: no screen is showing" }
             return Outcome.failure(SendFailure.APP_NOT_VISIBLE)
@@ -55,11 +90,6 @@ class PttController(
             notifications.demoteFromMicrophone(service)
         }
         return outcome
-    }
-
-    /** The talk button came up. */
-    suspend fun release() {
-        sessions.release()
     }
 }
 

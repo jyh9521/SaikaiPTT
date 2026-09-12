@@ -70,6 +70,17 @@ Activity 类：服务必须在没有任何 Activity 存活时照常工作，那�
 `ForegroundServiceStartNotAllowedException` / `SecurityException` 不是异常路径，
 是同一个答案的另一种说法，统一变成 `SendFailure.APP_NOT_VISIBLE`。
 
+**`PttController` 负责离开调用者的线程**。它下面没有任何东西会挂起——`SessionSignals`
+是在会话所有权那把锁里被调用的，实现不允许挂起，测试也在断言这一点。代价是整条链跑在
+谁调用它就跑在谁的线程上，而链里有一次 datagram 发送；讲话键是在主线程上按下的，
+Android 会因此杀掉进程。所以 dispatcher 定在这里而不是各个调用点：这是 UI 唯一的那扇门
+（今天是调试界面，Task32 是正式按钮，Task36 是悬浮窗），交给它们等于把同一个陷阱布三遍。
+
+同时是 `NonCancellable`，这不是保险起见。press 中途被取消时麦克风已经打开、会话还没建立，
+之后没有任何东西会去关它；release 被取消则留下开着的麦克风和一个还在等音频的对端。
+两者都够得着——`LaunchedEffect` 的 key 一变或者 composable 一离开就会取消。这两个调用里
+都没有无界等待，跑完只要几毫秒。
+
 **降级由会话状态驱动，不由按键驱动**（见 `app.session.VoiceSessionCoordinator`）。
 松手只是七条结束路径之一，而一个讲完话仍声明 `microphone` 的服务会让状态栏的麦克风
 指示灯一直亮着。
