@@ -19,3 +19,6 @@
 | ADR-005 | 前台服务、Android 版本兼容与电源锁 | Accepted | Task02, Task15, Task30 |
 | ADR-006 | 离线日语 ASR 引擎与模型分发 | Accepted | Task02, Task03, Task41 |
 | ADR-007 | Opus 编解码库选型与集成 | Accepted | Task22, Task23, Task26 |
+| ADR-008 | 播放路由：改用 `USAGE_MEDIA` | Accepted | Task21, Task26 |
+
+`ADR-008` 修订 `ADR-004 §3` 的两条（usage 与音量流），其余部分仍以 `ADR-004` 为准。

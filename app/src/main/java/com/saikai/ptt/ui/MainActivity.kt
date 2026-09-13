@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
         // the only way to check ADR-004's capture path on a real microphone,
         // which is what Task20 is accepted on.
         val recorder = AndroidAudioRecorder(this, container.config, container.logger)
-        val speaker = AndroidAudioPlayer(container.config, container.logger)
+        val speaker = AndroidAudioPlayer(this, container.config, container.logger)
 
         setContent {
             SaikaiPttTheme {

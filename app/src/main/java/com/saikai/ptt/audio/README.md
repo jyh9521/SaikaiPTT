@@ -37,6 +37,23 @@ buffer ≥ 4 帧、专用线程 `THREAD_PRIORITY_URGENT_AUDIO`、每帧零分配
 音量流是从 attributes 推出来的：`USAGE_VOICE_COMMUNICATION` 走 `STREAM_VOICE_CALL`，
 正是 ADR 要求的，也是发送期间音量键会调的那一条。
 
+**usage 是 `USAGE_MEDIA`，不是 `USAGE_VOICE_COMMUNICATION`（`docs/ADR/ADR-008`）。**
+后者承载在 `STREAM_VOICE_CALL` 上，凡是有听筒的设备都默认路由到听筒——对通话是对的，
+对对讲机是错的。实测手机走听筒、平板外放，而平板"正常"只是因为它没有听筒可选。
+
+track 级的 `preferredDevice` 压不过 voice-call 流的策略路由；平台给的正解
+`setCommunicationDevice` 是 API 31 起才有的，而参考低端设备是 Android 11，它的前身
+`isSpeakerphoneOn` 只在 `MODE_IN_COMMUNICATION` 下生效——那个模式本类刻意不进。
+所以改的是 usage。媒体流在每个 API 级别上都默认走扬声器，不需要任何强制手段；
+音量键随之调的是媒体音量，而那恰恰是用户真正调得到的那一条（通话音量在多数 ROM 上
+只有通话进行中才露出来）。
+
+内置扬声器仍会被设成 `preferredDevice` 作为第二道保险，**且仅在没有接入任何输出设备时**。
+路由在 track 打开时选定，每次接收都会新开一个 track，所以两次通话之间拔耳机跟得上，
+一次通话中间拔跟不上，代价最多几秒。
+
+实际路由到哪儿会记一条 INFO 日志（`routed to ...`）——路由问题在别人的机器上只能靠它发现。
+
 **写入永不阻塞**。它坐在网络与扬声器之间，一次等待腾出空间的写入会把「一帧迟到」
 变成「此后每一帧都迟到」。满了就丢尾巴：实时对话里，最新的音频是唯一值得留的音频。
 

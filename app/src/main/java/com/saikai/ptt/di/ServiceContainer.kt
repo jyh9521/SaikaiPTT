@@ -126,7 +126,7 @@ class ServiceContainer(
         codecs = ::newCodec,
     )
 
-    private val player = AndroidAudioPlayer(app.config, app.logger)
+    private val player = AndroidAudioPlayer(service, app.config, app.logger)
 
     /**
      * The receive pipeline: jitter buffer, decoder, speaker.

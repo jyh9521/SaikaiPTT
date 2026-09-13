@@ -1,8 +1,12 @@
 package com.saikai.ptt.audio
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Build
 import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.AudioError
@@ -17,7 +21,7 @@ import kotlinx.coroutines.withContext
 /**
  * The speaker, on Android.
  *
- * `docs/ADR/ADR-004` section 3: USAGE_VOICE_COMMUNICATION with
+ * `docs/ADR/ADR-004` section 3 and `docs/ADR/ADR-008`: USAGE_MEDIA with
  * CONTENT_TYPE_SPEECH, low-latency performance mode, and the system's own
  * routing -- speaker by default, and whatever the user plugs in or pairs after
  * that, because a radio that ignores a headset is a radio nobody can use
@@ -30,9 +34,30 @@ import kotlinx.coroutines.withContext
  * volume stream and disturb every other app on the device, for a problem this
  * product does not have.
  *
- * The volume stream follows from the attributes: USAGE_VOICE_COMMUNICATION is
- * carried on STREAM_VOICE_CALL, which is what the ADR asks for and what the
- * hardware volume keys will adjust during a transmission.
+ * **USAGE_MEDIA, and that is the fix for the earpiece.** ADR-004 originally
+ * asked for USAGE_VOICE_COMMUNICATION, which is carried on STREAM_VOICE_CALL --
+ * the phone call stream, which every device with an earpiece routes to the
+ * earpiece by default. Correct for a call, wrong for a walkie-talkie, which is
+ * held in front of you. On real hardware it played out of the earpiece on the
+ * phone and out of the speaker on the tablet, and the tablet was only right
+ * because it has no earpiece to choose.
+ *
+ * A track-level `preferredDevice` does not override it: routing for that stream
+ * belongs to the audio policy. The platform's own answer,
+ * `setCommunicationDevice`, arrived in API 31, and the reference low-end device
+ * is Android 11; its predecessor only works in MODE_IN_COMMUNICATION, which
+ * this class deliberately does not enter. So the usage changes instead, and
+ * ADR-008 records why. Media routes to the speaker on every API level with no
+ * forcing at all, and the volume keys then adjust the media volume -- which is
+ * the one a user can actually set, rather than the call volume, which most ROMs
+ * only expose while a call is in progress.
+ *
+ * The built-in speaker is still set as the track's preferred device, as a
+ * second line, and only when nothing the user attached is present: a headset,
+ * USB or Bluetooth output means they have said where they want it. The choice
+ * is made as the track opens, and a track is opened per transmission, so
+ * unplugging a headset between transmissions is picked up; doing it in the
+ * middle of one is not, which costs a few seconds at most.
  *
  * **Writes never block.** This sits between the network and the speaker, and a
  * write that waited for room would turn one late frame into every later frame
@@ -47,9 +72,12 @@ import kotlinx.coroutines.withContext
  * wait is bounded by how much the device could possibly be holding.
  */
 class AndroidAudioPlayer(
+    context: Context,
     private val config: SaikaiConfig,
     private val logger: Logger,
 ) : AudioPlayer {
+
+    private val appContext = context.applicationContext
 
     private val lock = Any()
     private var track: AudioTrack? = null
@@ -170,7 +198,8 @@ class AndroidAudioPlayer(
     private fun open(bufferBytes: Int): AudioTrack? {
         val audio = config.audio
         val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            // Not USAGE_VOICE_COMMUNICATION: see the class comment and ADR-008.
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
         val format = AudioFormat.Builder()
@@ -202,14 +231,72 @@ class AndroidAudioPlayer(
             return null
         }
 
+        // Before play(), so the first frame comes out of the right place.
+        preferredOutput()?.let { built.preferredDevice = it }
+
         return try {
             built.play()
+            logger.i(LogCategory.AUDIO) {
+                "routed to ${describe(built.routedDevice)}"
+            }
             built
         } catch (error: IllegalStateException) {
             logger.e(LogCategory.AUDIO, error) { "output device would not start" }
             built.release()
             null
         }
+    }
+
+    /**
+     * The built-in speaker, unless the user has attached something.
+     *
+     * Null means "no preference", which leaves the platform's own routing in
+     * place -- the right answer whenever a headset, a USB output or a Bluetooth
+     * device is connected, because connecting it is how the user says where the
+     * audio should go.
+     */
+    private fun preferredOutput(): AudioDeviceInfo? {
+        val manager = appContext.getSystemService(AudioManager::class.java) ?: return null
+        val outputs = try {
+            manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        } catch (error: RuntimeException) {
+            logger.w(LogCategory.AUDIO, error) { "could not enumerate output devices" }
+            return null
+        }
+
+        if (outputs.any { it.type in attachedOutputTypes }) return null
+        return outputs.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+    }
+
+    /**
+     * Outputs whose presence means the user has chosen where the audio goes.
+     *
+     * Built at run time because two of them did not exist at this project's
+     * minimum API level.
+     */
+    private val attachedOutputTypes: Set<Int> = buildSet {
+        add(AudioDeviceInfo.TYPE_WIRED_HEADSET)
+        add(AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
+        add(AudioDeviceInfo.TYPE_USB_HEADSET)
+        add(AudioDeviceInfo.TYPE_USB_DEVICE)
+        add(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
+        add(AudioDeviceInfo.TYPE_BLUETOOTH_SCO)
+        add(AudioDeviceInfo.TYPE_HEARING_AID)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(AudioDeviceInfo.TYPE_BLE_HEADSET)
+            add(AudioDeviceInfo.TYPE_BLE_SPEAKER)
+        }
+    }
+
+    /** Names a routed device for the log, which is how a routing surprise is found. */
+    private fun describe(device: AudioDeviceInfo?): String = when (device?.type) {
+        null -> "nothing"
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "the speaker"
+        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "the earpiece"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "a headset"
+        AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> "USB audio"
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth"
+        else -> "device type ${device.type}"
     }
 
     /**
