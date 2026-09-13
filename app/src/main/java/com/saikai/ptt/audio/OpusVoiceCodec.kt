@@ -95,7 +95,7 @@ class OpusVoiceCodec private constructor(
      * silence ADR-004 section 4 settles for and costs the same call. Used when
      * [decodeLost] found no redundancy.
      */
-    fun conceal(out: ShortArray): Int {
+    override fun conceal(out: ShortArray): Int {
         val handle = decoder
         if (handle == 0L) return 0
         val produced = OpusNative.decode(

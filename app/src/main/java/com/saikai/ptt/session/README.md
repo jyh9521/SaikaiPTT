@@ -24,3 +24,15 @@ BUSY、无应答、松手、被强插、WiFi 掉线、来电抢走音频焦点�
 **麦克风类型的降级由状态驱动，不由按键驱动**。松手只是其中一条路径；剩下几条不经过
 按键，而一个讲完话仍然声明 `microphone` 的服务会让状态栏的麦克风指示灯一直亮着——
 那是在向用户明确宣称本应用正在听他说话。
+
+## 接收（Task26）
+
+`SessionPacketListener` 多做两件事：
+
+- **VOICE_DATA** 喂给 `VoiceReceiver`。payload 是接收缓冲区上的视图，本次回调一返回
+  就会被下一个数据报覆盖，所以 jitter buffer 在 `offer` 里立刻拷贝。
+- **VOICE_END** 先 `receiver.flush(...)`，**再**把会话结束交给状态机。顺序是有意的：
+  状态机的第一个动作就是把扬声器收走，而缓冲区里剩下的正是那句话的结尾。
+
+`peerState` 与「立刻补一次心跳」不需要在这里做——`SessionManager.busy` 直接喂给
+`UdpPresenceAnnouncer`（Task25 接好的），忙线标志一变它就补播一次（Task17）。

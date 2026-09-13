@@ -65,6 +65,25 @@ interface VoiceCodec {
      */
     fun decodeLost(encoded: ByteArray, offset: Int, length: Int, out: ShortArray): Int = 0
 
+    /**
+     * Invents a frame to cover a gap, with nothing to work from.
+     *
+     * The other half of what a lost frame needs. [decodeLost] recovers the real
+     * audio when the packet after it arrived and carried the redundant copy;
+     * this is what is left when even that is gone, and a codec that models
+     * speech can extrapolate the last frame far better than silence can -- at
+     * the same cost, since the decoder has to advance its state over the gap
+     * either way.
+     *
+     * `docs/ADR/ADR-007` left the choice between this, [decodeLost] and silence
+     * to the jitter buffer, which is the only thing that knows which frames it
+     * still holds. All three are now used, in that order of preference.
+     *
+     * @return samples written, or 0 when the codec cannot conceal, in which
+     *   case the caller inserts silence.
+     */
+    fun conceal(out: ShortArray): Int = 0
+
     /** Frees whatever the codec holds. Safe to call twice. */
     fun release()
 }

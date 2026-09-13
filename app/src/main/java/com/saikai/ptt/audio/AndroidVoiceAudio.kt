@@ -11,6 +11,7 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.core.protocol.SessionId
 import com.saikai.ptt.core.session.VoiceAudio
+import com.saikai.ptt.core.session.VoiceReceiver
 
 /**
  * The audio devices, as one session-shaped object.
@@ -29,6 +30,10 @@ import com.saikai.ptt.core.session.VoiceAudio
  *   [AudioFocusPolicy] says the session must end. Wired to the session machine's
  *   own teardown, so a phone call ends the transmission properly -- VOICE_END
  *   sent, recording finalised -- instead of the audio simply stopping.
+ * @param receiver the jitter buffer and decoder behind the speaker. Opened here
+ *   rather than by whatever handles packets, because this runs inside the
+ *   session machine's lock and finishes before VOICE_ACCEPT goes out: there is
+ *   no instant at which a frame can arrive with nowhere to put it.
  */
 class AndroidVoiceAudio(
     private val recorder: AudioRecorder,
@@ -37,6 +42,7 @@ class AndroidVoiceAudio(
     private val logger: Logger,
     private val frames: AudioFrameSink,
     private val onFocusLost: (AudioFocusChange) -> Unit,
+    private val receiver: VoiceReceiver,
 ) : VoiceAudio {
 
     override suspend fun startCapture(): Boolean {
@@ -64,17 +70,30 @@ class AndroidVoiceAudio(
             logger.w(LogCategory.AUDIO) { "no audio focus; not opening the speaker" }
             return false
         }
-        return when (val outcome = player.start()) {
-            is Outcome.Success -> true
+        when (val outcome = player.start()) {
+            is Outcome.Success -> Unit
             is Outcome.Failure -> {
                 logger.w(LogCategory.AUDIO) { "playback refused: ${outcome.error}" }
                 focus.release()
-                false
+                return false
             }
         }
+        if (!receiver.open(sessionId)) {
+            // An open speaker with no decoder behind it would accept the
+            // session and then play nothing, which is the one answer worse
+            // than refusing it.
+            player.stop()
+            focus.release()
+            return false
+        }
+        return true
     }
 
     override suspend fun stopPlayback() {
+        // The receiver first: it holds the decoder, and everything it had to
+        // play has already been written by the time this runs. The player then
+        // waits out whatever is still in the device before letting go.
+        receiver.close()
         player.stop()
         focus.release()
     }

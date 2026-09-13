@@ -53,6 +53,16 @@ buffer ≥ 4 帧、专用线程 `THREAD_PRIORITY_URGENT_AUDIO`、每帧零分配
 编解码器**每次发送新建一个**（`ServiceContainer.newCodec`）。理由写在
 `core.session.VoiceTransmitter` 与 `core.session/README.md` 里。
 
-## 待实现
+## 接入接收管线（Task26）
 
-jitter buffer 与接收播放管线（Task26）。
+`AndroidVoiceAudio.startPlayback` 除了开扬声器，还要开 `core.session.VoiceReceiver`
+——**在会话机的锁里、在 VOICE_ACCEPT 发出之前**。所以不存在「帧已经到了但还没地方放」
+的那一瞬间。解码器开不出来就跟扬声器开不出来一样拒绝会话：开着扬声器却什么都放不出来，
+是比拒绝更糟的那个答案。
+
+**`AndroidAudioPlayer.stop()` 现在会等已经排队的音频放完。** `AudioTrack.stop()`
+在 stream 模式下会把缓冲区里的放完再停，`pause() + flush()` 则直接扔掉。发送结束的
+那一刻，jitter buffer 的垫底加设备自己的缓冲总有几百毫秒在路上，扔掉它等于**每一句话
+都被切掉最后一个词**——这种毛病发出去以后会被算在网络头上。等待时长按「写入帧数减去
+播放头位置」算，并以设备缓冲本身为上限，因为那是它最多能攥住的量，也因为这个等待会
+发生在服务关闭的过程中。

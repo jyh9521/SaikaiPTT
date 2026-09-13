@@ -6,8 +6,11 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.core.protocol.PacketType
 import com.saikai.ptt.core.protocol.SessionTerminatePayload
+import com.saikai.ptt.core.protocol.VoiceDataPayload
+import com.saikai.ptt.core.protocol.VoiceEndPayload
 import com.saikai.ptt.core.protocol.VoiceStartPayload
 import com.saikai.ptt.core.session.SessionManager
+import com.saikai.ptt.core.session.VoiceReceiver
 import com.saikai.ptt.network.InboundPacket
 import com.saikai.ptt.network.InboundPacketListener
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +42,7 @@ import kotlinx.coroutines.launch
  */
 class SessionPacketListener(
     private val sessions: SessionManager,
+    private val receiver: VoiceReceiver,
     private val peers: PeerRegistry,
     private val logger: Logger,
     private val scope: CoroutineScope,
@@ -50,6 +54,16 @@ class SessionPacketListener(
 
         if (inbound.packet.type == PacketType.VOICE_DATA) {
             sessions.onVoiceFrame(header.sessionId)
+            val payload = inbound.packet.payload as? VoiceDataPayload ?: return
+            // The payload is a view over the receive buffer, which is refilled
+            // as soon as this returns. The jitter buffer copies it in.
+            receiver.onFrame(
+                sessionId = header.sessionId,
+                sequence = header.sequenceNumber,
+                frame = payload.frame,
+                offset = payload.frameOffset,
+                length = payload.frameLength,
+            )
             return
         }
 
@@ -74,8 +88,15 @@ class SessionPacketListener(
 
             PacketType.BUSY -> scope.launch { sessions.onBusy(sender) }
 
-            PacketType.VOICE_END -> scope.launch {
-                sessions.onVoiceEnd(sender, header.sessionId)
+            PacketType.VOICE_END -> {
+                // Play out what is held *before* handing the machine the end of
+                // the session: its first act is to take the speaker away, and
+                // the frames still in the buffer are the last of the sentence.
+                val payload = inbound.packet.payload as? VoiceEndPayload
+                if (payload != null) {
+                    receiver.flush(header.sessionId, payload.finalDataSequence)
+                }
+                scope.launch { sessions.onVoiceEnd(sender, header.sessionId) }
             }
 
             PacketType.SESSION_TERMINATE -> {

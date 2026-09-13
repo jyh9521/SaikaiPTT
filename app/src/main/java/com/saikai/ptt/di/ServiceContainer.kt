@@ -17,6 +17,7 @@ import com.saikai.ptt.core.protocol.ReceivingSession
 import com.saikai.ptt.core.protocol.TerminationReason
 import com.saikai.ptt.core.session.SessionManager
 import com.saikai.ptt.core.session.SessionState
+import com.saikai.ptt.core.session.VoiceReceiver
 import com.saikai.ptt.core.session.VoiceTransmitter
 import com.saikai.ptt.discovery.UdpPeerDiscovery
 import com.saikai.ptt.network.BoundPorts
@@ -125,6 +126,22 @@ class ServiceContainer(
         codecs = ::newCodec,
     )
 
+    private val player = AndroidAudioPlayer(app.config, app.logger)
+
+    /**
+     * The receive pipeline: jitter buffer, decoder, speaker.
+     *
+     * Holds the player rather than being held by it, because everything between
+     * the network and the device -- ordering, gap filling, decoding -- happens
+     * before a byte reaches `AudioTrack`.
+     */
+    val receiver: VoiceReceiver = VoiceReceiver(
+        config = app.config,
+        logger = app.logger,
+        player = player,
+        codecs = ::newCodec,
+    )
+
     /**
      * The microphone, the speaker and the audio focus around both.
      *
@@ -135,11 +152,12 @@ class ServiceContainer(
      */
     val audio: AndroidVoiceAudio = AndroidVoiceAudio(
         recorder = AndroidAudioRecorder(service, app.config, app.logger),
-        player = AndroidAudioPlayer(app.config, app.logger),
+        player = player,
         focus = AndroidAudioFocus(service, app.logger),
         logger = app.logger,
         frames = transmitter::onPcmFrame,
         onFocusLost = { endSessionForAudioFocus() },
+        receiver = receiver,
     )
 
     /** The state machine. One per service, and the only arbiter of who is talking. */
@@ -193,7 +211,7 @@ class ServiceContainer(
     private val coordinator = VoiceSessionCoordinator(
         sessions = sessions,
         router = router,
-        listener = SessionPacketListener(sessions, peers, app.logger, scope),
+        listener = SessionPacketListener(sessions, receiver, peers, app.logger, scope),
         transmitter = transmitter,
         powerLocks = powerLocks,
         onTransmittingEnded = { notifications.demoteFromMicrophone(service) },
@@ -283,12 +301,13 @@ class ServiceContainer(
     }
 
     /**
-     * A fresh encoder and decoder for one transmission.
+     * A fresh encoder and decoder for one transmission, in either direction.
      *
      * Per session, not per service. Codec state is carried between frames, and
-     * the peer creates a new decoder for every session it accepts, so an encoder
-     * reused from the last transmission predicts against history the far end has
-     * never seen -- and the frames that decode wrong are the first ones.
+     * both sides start clean for every transmission: an encoder reused from the
+     * last one predicts against history the far end's new decoder has never
+     * seen, and a decoder reused would be doing the same in reverse. Either way
+     * the frames that come out wrong are the first ones.
      */
     private fun newCodec(): VoiceCodec? =
         OpusVoiceCodec.create(app.config, app.logger).valueOrNull()

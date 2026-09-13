@@ -153,6 +153,12 @@ inband FEC 开、DTX 关，外加两项 ADR-004 没有写出但必需的：
 走 libopus 自己的丢包隐藏（`len=0`），它比插静音更好且开销相同。**是否启用、以及
 抖动缓冲如何调用它们，是 Task26 的决定**，本 ADR 只保证能力存在且已验证可用。
 
+> **Task26 的决定**（补记，非改动上文）：三者都用，按优先级——握着后继帧就用
+> `decodeLost` 取回 FEC 副本，没有后继帧就 `conceal()`，两样都失败才补静音。
+> 判断落在 `core.session.JitterBuffer`，因为只有它知道自己此刻还握着哪些帧。
+> `VoiceCodec` 为此新增 `conceal(out)`，默认返回 0。细节见
+> `core/src/main/kotlin/com/saikai/ptt/core/session/README.md`。
+
 ### 3. libopus v1.6.1 的 CMake 构建在 ARM + 定点下必然链接失败（上游缺陷）
 
 第一次真机构建在 `arm64-v8a` 和 `armeabi-v7a` 上同时失败：

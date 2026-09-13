@@ -11,6 +11,7 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
 import com.saikai.ptt.core.logger.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -36,6 +37,14 @@ import kotlinx.coroutines.withContext
  * **Writes never block.** This sits between the network and the speaker, and a
  * write that waited for room would turn one late frame into every later frame
  * being late too.
+ *
+ * **Stopping waits for what has already been queued.** `AudioTrack.stop()` in
+ * streaming mode plays out what it holds and then stops; `pause()` followed by
+ * `flush()` throws it away. Between the jitter buffer's cushion and the device's
+ * own buffer there is always a fraction of a second in flight when a
+ * transmission ends, and discarding it clips the last word off every single
+ * one -- the kind of fault that ships and is then blamed on the network. The
+ * wait is bounded by how much the device could possibly be holding.
  */
 class AndroidAudioPlayer(
     private val config: SaikaiConfig,
@@ -44,6 +53,12 @@ class AndroidAudioPlayer(
 
     private val lock = Any()
     private var track: AudioTrack? = null
+
+    /** Frames handed to the device since [start]. Guarded by [lock]. */
+    private var framesWritten: Long = 0L
+
+    /** The device's buffer, in frames, which bounds how long a drain can take. */
+    private var trackBufferFrames: Int = 0
 
     override val isPlaying: Boolean get() = synchronized(lock) { track != null }
 
@@ -75,6 +90,8 @@ class AndroidAudioPlayer(
                 return Outcome.success(Unit)
             }
             track = opened
+            framesWritten = 0L
+            trackBufferFrames = bufferBytes / audio.bytesPerSample
         }
         logger.i(LogCategory.AUDIO) { "playing at ${audio.sampleRateHz}Hz, ${bufferBytes}B buffer" }
         return Outcome.success(Unit)
@@ -103,13 +120,51 @@ class AndroidAudioPlayer(
                 "output full; dropped ${length - written} of $length bytes"
             }
         }
+        synchronized(lock) { framesWritten += written / config.audio.bytesPerSample }
         return written
     }
 
     override suspend fun stop() {
-        val current = synchronized(lock) { track.also { track = null } } ?: return
+        val current: AudioTrack
+        val written: Long
+        val bufferFrames: Int
+        synchronized(lock) {
+            current = track ?: return
+            track = null
+            written = framesWritten
+            bufferFrames = trackBufferFrames
+            framesWritten = 0L
+            trackBufferFrames = 0
+        }
+
+        val waitMillis = withContext(Dispatchers.IO) { stopAndMeasure(current, written, bufferFrames) }
+        if (waitMillis > 0L) delay(waitMillis)
         withContext(Dispatchers.IO) { releaseTrack(current) }
-        logger.i(LogCategory.AUDIO) { "playback stopped" }
+
+        logger.i(LogCategory.AUDIO) { "playback stopped after ${waitMillis}ms of playout" }
+    }
+
+    /**
+     * Stops the device and reports how long what is queued needs to be heard.
+     *
+     * The remainder is the difference between what was written and what the
+     * playback head has reached. Bounded by the device's own buffer, because
+     * that is the most it can be holding, and because an unbounded wait here
+     * would be a wait in the middle of the service shutting down.
+     */
+    private fun stopAndMeasure(track: AudioTrack, written: Long, bufferFrames: Int): Long = try {
+        if (track.state != AudioTrack.STATE_INITIALIZED) {
+            0L
+        } else {
+            // The head position is an unsigned frame counter; a session would
+            // have to run for days to wrap it at 16 kHz.
+            val head = track.playbackHeadPosition.toLong() and 0xFFFFFFFFL
+            val queued = (written - head).coerceAtLeast(0L).coerceAtMost(bufferFrames.toLong())
+            track.stop()
+            queued * 1_000L / config.audio.sampleRateHz
+        }
+    } catch (_: IllegalStateException) {
+        0L
     }
 
     private fun open(bufferBytes: Int): AudioTrack? {
@@ -168,6 +223,9 @@ class AndroidAudioPlayer(
     private fun releaseTrack(track: AudioTrack) {
         try {
             if (track.state == AudioTrack.STATE_INITIALIZED) {
+                // Discarding, not draining: by the time this runs either
+                // stopAndMeasure has already played the tail out, or the track
+                // is one that never became the live one.
                 track.pause()
                 track.flush()
                 track.stop()
