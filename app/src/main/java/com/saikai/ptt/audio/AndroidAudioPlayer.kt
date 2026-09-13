@@ -15,6 +15,7 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
 import com.saikai.ptt.core.logger.Logger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -167,8 +168,16 @@ class AndroidAudioPlayer(
         val waitMillis = withContext(Dispatchers.IO) {
             stopAndMeasure(current.track, current.framesWritten, current.bufferFrames)
         }
-        if (waitMillis > 0L) delay(waitMillis)
-        withContext(Dispatchers.IO) { releaseTrack(current.track) }
+        try {
+            if (waitMillis > 0L) delay(waitMillis)
+        } finally {
+            // NonCancellable, and in a finally. This is the one wait in the
+            // audio path that a service shutdown can land in the middle of, and
+            // a cancellation that skipped the release would leak the device --
+            // an AudioTrack nothing holds a reference to any more and nothing
+            // will ever free.
+            withContext(NonCancellable + Dispatchers.IO) { releaseTrack(current.track) }
+        }
 
         logger.i(LogCategory.AUDIO) { "playback stopped after ${waitMillis}ms of playout" }
     }

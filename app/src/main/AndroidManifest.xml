@@ -86,6 +86,21 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice|microphone" />
 
+        <!--
+            Brings the service back after a reboot, receiving only
+            (docs/ADR/ADR-005 section 4). Exported because the system is what
+            delivers BOOT_COMPLETED; the intent filter is the only way in, and
+            the receiver checks the action before acting on it.
+        -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

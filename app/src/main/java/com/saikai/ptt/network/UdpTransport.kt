@@ -1,6 +1,7 @@
 package com.saikai.ptt.network
 
 import com.saikai.ptt.core.common.Outcome
+import com.saikai.ptt.core.common.subsystemFailures
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
@@ -132,7 +133,11 @@ class UdpTransport(
         }
 
         val job = SupervisorJob()
-        val scope = CoroutineScope(job)
+        // Its own job, because stop() has to join it -- so the handler is added
+        // here rather than through subsystemScope. Without it, anything that
+        // escaped a receive loop would reach the uncaught handler and end the
+        // process, which for this class means one hostile datagram.
+        val scope = CoroutineScope(job + subsystemFailures("udp-transport", logger))
         val controlDispatcher = dispatcherNamed(CONTROL_THREAD)
         val voiceDispatcher = dispatcherNamed(VOICE_THREAD)
 

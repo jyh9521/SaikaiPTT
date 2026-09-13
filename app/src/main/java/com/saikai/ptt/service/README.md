@@ -88,7 +88,29 @@ Android 会因此杀掉进程。所以 dispatcher 定在这里而不是各个调
 电源锁同理，而且 wake lock 带 5 分钟超时。超时不是保险丝而是最后一道防线：一个进程
 如果没跑完自己的释放路径，能注意到的只有平台。
 
+## 生产化（Task30）
+
+| 文件 | 职责 |
+|---|---|
+| `BootReceiver.kt` | 开机后以 `connectedDevice` 类型拉起服务 |
+
+**子系统失败不得杀死服务，而 `SupervisorJob` 并不能做到这件事。** 这是本任务改动
+最大的一处，也是最容易漏的一处：supervisor 只阻止一个子协程的失败去取消它的兄弟，
+对异常本身什么都不做——异常照样走到线程的 uncaught handler，在 Android 上那就是**进程**。
+于是一次心跳循环抛异常会带走整个应用，包括一通与它毫无关系的通话。
+
+`core.common.subsystemScope` 补上 `CoroutineExceptionHandler`，服务、发现、心跳、传输
+四处全部换用它（传输保留自己的 Job 以便 `stop()` join，所以单独取 handler）。抛异常的
+那个协程仍然会死，因为没有可恢复的语义；它的兄弟和进程活着。
+
+**周期性循环则连死都不该死。** `core.common.repeatEvery` 让心跳与超时扫描在 work 抛
+异常时只损失一个周期。心跳循环一旦死掉，三个周期后这台设备就从全网的设备列表里消失，
+而它自己的屏幕上一切正常——那是最坏的一种失败。
+
+**开机自启不预先检查设备是否配置过。** 检查要读 DataStore，而在 `startForegroundService`
+之前让 BOOT_COMPLETED 广播结束，正好放弃了「允许从后台启动前台服务」的那个豁免。
+拿确定性换体面是反的：没设名字的设备什么都不广播，只是浪费一条通知，不是故障。
+
 ## 待实现
 
 - 正式通知与操作按钮（Task31）
-- 开机自启（`BOOT_COMPLETED` → `connectedDevice`）

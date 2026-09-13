@@ -23,6 +23,7 @@ import com.saikai.ptt.network.InboundPacketListener
 import com.saikai.ptt.network.InboundPacketRouter
 import com.saikai.ptt.network.TransportChannel
 import com.saikai.ptt.network.UdpTransport
+import com.saikai.ptt.core.common.subsystemScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -92,7 +93,7 @@ class UdpPeerDiscovery(
 
     override suspend fun start() {
         router.register(this)
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        scope = subsystemScope("discovery", logger)
         announce(AnnounceReason.SERVICE_READY)
         // The first emission is the state the announcement above already
         // carried; only later ones are a change worth telling the network about.

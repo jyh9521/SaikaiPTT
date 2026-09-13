@@ -21,6 +21,8 @@ import com.saikai.ptt.network.InboundPacketListener
 import com.saikai.ptt.network.InboundPacketRouter
 import com.saikai.ptt.network.TransportChannel
 import com.saikai.ptt.network.UdpTransport
+import com.saikai.ptt.core.common.repeatEvery
+import com.saikai.ptt.core.common.subsystemScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -81,22 +83,23 @@ class UdpPresenceAnnouncer(
 
     override suspend fun start() {
         router.register(this)
-        val running = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val running = subsystemScope("presence", logger)
         scope = running
 
+        // repeatEvery, not a bare loop: a heartbeat loop that dies once takes
+        // this device off every peer list on the network three periods later,
+        // while its own screen still says everything is fine. One bad beat is
+        // worth a log line, not the loop. The delay comes first either way --
+        // discovery has just announced this device three times over 900 ms, and
+        // a fourth packet in the same breath tells nobody anything new.
         running.launch {
-            while (isActive) {
-                // Delay first: discovery has just announced this device three
-                // times over 900 ms, and a fourth packet in the same breath
-                // tells nobody anything new.
-                delay(config.presence.heartbeatInterval.inWholeMilliseconds)
+            repeatEvery(config.presence.heartbeatInterval.inWholeMilliseconds, "heartbeat", logger) {
                 beat("periodic")
             }
         }
 
         running.launch {
-            while (isActive) {
-                delay(config.presence.evaluationInterval.inWholeMilliseconds)
+            repeatEvery(config.presence.evaluationInterval.inWholeMilliseconds, "timeouts", logger) {
                 peers.evaluate()
             }
         }

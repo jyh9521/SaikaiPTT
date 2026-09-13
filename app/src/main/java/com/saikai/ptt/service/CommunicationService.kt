@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.IBinder
 import com.saikai.ptt.SaikaiApplication
 import com.saikai.ptt.core.common.Outcome
+import com.saikai.ptt.core.common.subsystemScope
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.protocol.TerminationReason
 import com.saikai.ptt.di.ServiceContainer
@@ -42,10 +43,29 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 class CommunicationService : Service() {
 
-    // Not Dispatchers.Main: nothing here touches a view, start-up reads DataStore,
-    // and shutdown joins two receive threads. Running that on the main thread
-    // would put a disk read between the user and their talk button.
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /**
+     * Not Dispatchers.Main: nothing here touches a view, start-up reads
+     * DataStore, and shutdown joins two receive threads. Running that on the
+     * main thread would put a disk read between the user and their talk button.
+     *
+     * [subsystemScope] rather than a bare supervisor. A supervisor keeps one
+     * child's failure from cancelling its siblings and does nothing about the
+     * exception, which then reaches the thread's uncaught handler -- and on
+     * Android that ends the process. Everything this service launches runs
+     * here, including the handlers for every packet that arrives, so without
+     * the exception handler one malformed session from one peer could take down
+     * a device that was in the middle of a call with somebody else.
+     *
+     * Lazy because the logger comes from the application container, which is
+     * not reachable until the service is attached.
+     */
+    private val scope: CoroutineScope by lazy {
+        subsystemScope(
+            name = "communication-service",
+            logger = (application as SaikaiApplication).container.logger,
+            context = Dispatchers.Default,
+        )
+    }
 
     private val mutex = Mutex()
     private lateinit var notifications: ServiceNotifications
