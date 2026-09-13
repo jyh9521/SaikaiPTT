@@ -8,7 +8,9 @@ import com.saikai.ptt.audio.AndroidVoiceAudio
 import com.saikai.ptt.audio.OpusVoiceCodec
 import com.saikai.ptt.core.common.LifecycleStep
 import com.saikai.ptt.core.domain.DeviceId
+import com.saikai.ptt.core.domain.AppSettings
 import com.saikai.ptt.core.domain.LocalPresence
+import com.saikai.ptt.core.domain.LocalUser
 import com.saikai.ptt.core.domain.PeerRegistry
 import com.saikai.ptt.core.domain.VoiceCodec
 import com.saikai.ptt.core.protocol.PacketRateLimiter
@@ -35,7 +37,10 @@ import com.saikai.ptt.service.VoiceSessionPowerLocks
 import com.saikai.ptt.session.SessionPacketListener
 import com.saikai.ptt.session.VoiceSessionCoordinator
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -160,14 +165,37 @@ class ServiceContainer(
         receiver = receiver,
     )
 
+    /**
+     * The two settings the session machine consults, held in memory.
+     *
+     * Both are read *inside* the mutex that arbitrates session ownership -- the
+     * name when the button goes down, the interrupt policy when a caller has to
+     * be accepted or refused. Reading them from DataStore there would hold that
+     * lock across a disk read, on the one path where two devices calling at the
+     * same instant are being told apart, and where the caller's 150 ms
+     * retransmission clock is already running (`docs/03_Protocol.md` section 34).
+     *
+     * `stateIn` with eager sharing turns each into a value already in memory.
+     * The defaults apply only in the moments after the service starts, before
+     * the first emission; by the time anyone can press a button the screen has
+     * been open long enough for both to be warm, and both defaults are the safe
+     * answer anyway -- no name refuses to transmit, and no interruption is what
+     * `allow_interrupt` defaults to.
+     */
+    private val settings: StateFlow<AppSettings> =
+        app.settingsRepository.settings.stateIn(scope, SharingStarted.Eagerly, AppSettings.DEFAULT)
+
+    private val activeUser: StateFlow<LocalUser?> =
+        app.localUsers.activeUser.stateIn(scope, SharingStarted.Eagerly, null)
+
     /** The state machine. One per service, and the only arbiter of who is talking. */
     val sessions: SessionManager = SessionManager(
         config = app.config,
         logger = app.logger,
         signals = transmitter,
         audio = audio,
-        localName = { app.localUsers.activeUser.first()?.displayName },
-        allowInterrupt = { app.settingsRepository.current().allowInterrupt },
+        localName = { activeUser.value?.displayName },
+        allowInterrupt = { settings.value.allowInterrupt },
         scope = scope,
     )
 

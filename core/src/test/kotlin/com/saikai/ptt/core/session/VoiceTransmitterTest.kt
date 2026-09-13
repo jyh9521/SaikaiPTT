@@ -269,7 +269,11 @@ class VoiceTransmitterTest {
     }
 
     @Test
-    fun `a session that is interrupted mid-transmission also stops the stream`() {
+    fun `a transmission cut off mid-word is kept, not thrown away`() {
+        // Task29: a force interrupt ends a transmission that was heard, right
+        // up to the moment it stopped, and it is recorded as INTERRUPTED. That
+        // is the opposite of a request nobody answered, and the two arrive here
+        // through the same path -- the difference is whether anything went out.
         start()
         accept()
         capture(1)
@@ -279,6 +283,19 @@ class VoiceTransmitterTest {
         capture(2)
 
         assertEquals(listOf(1), sink.voiceMarkers())
+        assertEquals(1, recording.finished)
+        assertEquals(0, recording.discarded)
+    }
+
+    @Test
+    fun `an attempt that never transmitted is thrown away even after acceptance`() {
+        // Accepted, then cut off before the user said anything. Nothing was
+        // heard, so there is nothing to keep.
+        start()
+        accept()
+        subject.onSessionState(SessionState.Idle)
+
+        assertEquals(0, recording.finished)
         assertEquals(1, recording.discarded)
     }
 

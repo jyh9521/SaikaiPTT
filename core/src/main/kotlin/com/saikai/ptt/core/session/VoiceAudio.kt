@@ -39,8 +39,18 @@ interface VoiceAudio {
      */
     suspend fun startPlayback(sessionId: SessionId): Boolean
 
-    /** Closes the speaker. */
-    suspend fun stopPlayback()
+    /**
+     * Closes the speaker.
+     *
+     * [drain] is true only for the one ending where the tail is wanted: the
+     * speaker finished and said so with VOICE_END. Every other way a session
+     * ends -- a force interrupt, the network going, a phone call -- has already
+     * cut the transmission off, and finishing its last fraction of a second
+     * would delay whatever displaced it. On a force interrupt that delay lands
+     * inside the lock that arbitrates session ownership, which is the one place
+     * this product cannot afford to wait.
+     */
+    suspend fun stopPlayback(drain: Boolean = false)
 }
 
 /**
@@ -54,5 +64,5 @@ object NoVoiceAudio : VoiceAudio {
     override suspend fun startCapture(): Boolean = true
     override suspend fun stopCapture() = Unit
     override suspend fun startPlayback(sessionId: SessionId): Boolean = true
-    override suspend fun stopPlayback() = Unit
+    override suspend fun stopPlayback(drain: Boolean) = Unit
 }

@@ -312,7 +312,11 @@ class SessionManager(
         mutex.withLock {
             val current = _state.value as? SessionState.Receiving ?: return
             if (current.sessionId != sessionId || current.peer != sender) return
-            audio.stopPlayback()
+
+            // Finish first, then let the speaker play out its tail. The other
+            // order keeps this device marked busy for the length of the
+            // playout, so a caller pressing the instant the last word ends
+            // would be refused for a session that is already over.
             finish(SessionOutcome.ReceiveEnded(
                 sessionId = current.sessionId,
                 peer = current.peer,
@@ -320,6 +324,7 @@ class SessionManager(
                 startedAtMillis = current.startedAtMillis,
                 endedAtMillis = nowMillis(),
             ))
+            audio.stopPlayback(drain = true)
         }
     }
 

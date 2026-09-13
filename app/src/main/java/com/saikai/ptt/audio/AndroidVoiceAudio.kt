@@ -89,12 +89,11 @@ class AndroidVoiceAudio(
         return true
     }
 
-    override suspend fun stopPlayback() {
+    override suspend fun stopPlayback(drain: Boolean) {
         // The receiver first: it holds the decoder, and everything it had to
-        // play has already been written by the time this runs. The player then
-        // waits out whatever is still in the device before letting go.
+        // play has already been written by the time this runs.
         receiver.close()
-        player.stop()
+        if (drain) player.drainAndStop() else player.stop()
         focus.release()
     }
 

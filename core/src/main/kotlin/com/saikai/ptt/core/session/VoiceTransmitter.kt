@@ -97,7 +97,7 @@ class VoiceTransmitter(
             when {
                 current != null && current.sessionId == sessionId -> current
                 else -> {
-                    if (current != null) close(current, keep = false)
+                    if (current != null) close(current)
                     open(sessionId, target, endpoint) ?: return false
                 }
             }
@@ -167,7 +167,7 @@ class VoiceTransmitter(
                     ""
                 }
         }
-        synchronized(lock) { if (outgoing === session) close(session, keep = true) }
+        synchronized(lock) { if (outgoing === session) close(session) }
         return sent
     }
 
@@ -257,10 +257,10 @@ class VoiceTransmitter(
 
                 state is SessionState.Requesting && state.sessionId == session.sessionId -> Unit
 
-                // Anything else means this stream is over. voiceEnd has already
-                // closed it on the normal path, so reaching here with it still
-                // open means the transmission did not finish: nothing to keep.
-                else -> close(session, keep = false)
+                // Anything else means this stream is over. voiceEnd has
+                // already closed it on the normal path, so reaching here with
+                // it still open means the transmission did not finish.
+                else -> close(session)
             }
         }
     }
@@ -329,9 +329,31 @@ class VoiceTransmitter(
         return session
     }
 
-    /** Caller holds the lock. */
-    private fun close(session: Outgoing, keep: Boolean) {
-        if (keep) recording.finish(session.sessionId) else recording.discard(session.sessionId)
+    /**
+     * Ends the stream and decides whether its recording survives.
+     *
+     * One rule, in one place, because every way a transmission can end arrives
+     * here: **the recording is kept if anything actually went out.**
+     *
+     * That is the line `docs/01_PRD.md` section 10.4 draws. A request refused
+     * with BUSY, one nobody answered, one the user let go of before the peer
+     * agreed -- none of them were speech anybody heard, and none leave a
+     * record. A transmission cut off by a force interrupt is the opposite: it
+     * was heard right up to the moment it stopped, and Task29 requires it be
+     * kept and marked INTERRUPTED.
+     *
+     * Frames sent, not "the peer accepted": a session accepted and then
+     * released before a word was spoken produces an empty recording and an
+     * empty history row, which is worse than nothing.
+     *
+     * Caller holds the lock.
+     */
+    private fun close(session: Outgoing) {
+        if (session.packetizer.framesSent > 0) {
+            recording.finish(session.sessionId)
+        } else {
+            recording.discard(session.sessionId)
+        }
         session.codec.release()
         session.preRoll.clear()
         if (outgoing === session) outgoing = null

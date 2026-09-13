@@ -89,8 +89,12 @@ internal class FakeAudio(
         return true
     }
 
-    override suspend fun stopPlayback() {
+    var playoutDrained = false
+        private set
+
+    override suspend fun stopPlayback(drain: Boolean) {
         playing = false
+        if (drain) playoutDrained = true
     }
 }
 

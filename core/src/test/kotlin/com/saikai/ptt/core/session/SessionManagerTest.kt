@@ -346,6 +346,37 @@ class SessionManagerTest {
     }
 
     @Test
+    fun `a transmission that ends normally is allowed to finish playing`() = runTest {
+        // The tail is the last word of a sentence. It is the one ending where
+        // waiting for it is right.
+        val manager = manager()
+        val session = SessionId.random()
+        manager.onVoiceStart(bob.deviceId, session, voiceStart("Bob"), bob.endpoint)
+
+        manager.onVoiceEnd(bob.deviceId, session)
+
+        assertTrue(audio.playoutDrained)
+        assertEquals(SessionState.Idle, manager.state.value)
+        assertFalse(manager.busy.value)
+    }
+
+    @Test
+    fun `an interruption does not wait for the displaced speaker's tail`() = runTest {
+        // Somebody cut in because it was urgent. Finishing the previous
+        // speaker's last fraction of a second first would delay them -- and the
+        // wait would happen inside the lock that arbitrates who owns the
+        // session, which is the one place this product cannot afford to wait.
+        allowInterrupt = true
+        val manager = manager()
+        manager.onVoiceStart(bob.deviceId, SessionId.random(), voiceStart("Bob"), bob.endpoint)
+
+        manager.onVoiceStart(carol.deviceId, SessionId.random(), voiceStart("Carol"), carol.endpoint)
+
+        assertFalse("the interrupt path drained the speaker", audio.playoutDrained)
+        assertEquals("Carol", (manager.state.value as SessionState.Active).peerName)
+    }
+
+    @Test
     fun `a refusal names the session the caller asked about`() = runTest {
         // The caller's own id, echoed. It is what lets the caller tell this
         // answer from one left over from an attempt it has already abandoned,

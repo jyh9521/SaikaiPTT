@@ -32,8 +32,30 @@ interface AudioPlayer {
      */
     fun write(pcm: ByteArray, offset: Int, length: Int): Int
 
-    /** Stops playback and releases the output device. Safe when not started. */
+    /**
+     * Stops now, discarding whatever is still queued. Safe when not started.
+     *
+     * The right answer whenever the session did not end of its own accord: a
+     * force interrupt, a network loss, a phone call taking the audio. In all
+     * of those the queued audio belongs to a transmission that has been cut
+     * off, and playing it out would delay what comes next in order to finish
+     * something the listener has already been told is over.
+     */
     suspend fun stop()
+
+    /**
+     * Plays out what is already queued, then stops.
+     *
+     * For the one ending where the tail is wanted: the speaker reached the end
+     * of a sentence and said so. Between the jitter buffer's cushion and the
+     * device's own there is always a fraction of a second in flight when a
+     * transmission ends, and discarding it clips the last word off every
+     * single one.
+     *
+     * Bounded by how much the device could be holding, so it cannot become an
+     * unbounded wait inside a service that is shutting down.
+     */
+    suspend fun drainAndStop()
 }
 
 /**

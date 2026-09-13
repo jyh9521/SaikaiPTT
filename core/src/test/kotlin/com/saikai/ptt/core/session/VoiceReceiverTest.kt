@@ -234,6 +234,7 @@ class VoiceReceiverTest {
         override val isPlaying: Boolean get() = true
         override suspend fun start(): Outcome<Unit, AudioError> = Outcome.success(Unit)
         override suspend fun stop() = Unit
+        override suspend fun drainAndStop() = Unit
 
         override fun write(pcm: ByteArray, offset: Int, length: Int): Int {
             val samples = ShortArray(1)

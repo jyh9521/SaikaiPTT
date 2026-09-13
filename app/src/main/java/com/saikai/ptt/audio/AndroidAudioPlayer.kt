@@ -63,13 +63,16 @@ import kotlinx.coroutines.withContext
  * write that waited for room would turn one late frame into every later frame
  * being late too.
  *
- * **Stopping waits for what has already been queued.** `AudioTrack.stop()` in
- * streaming mode plays out what it holds and then stops; `pause()` followed by
- * `flush()` throws it away. Between the jitter buffer's cushion and the device's
- * own buffer there is always a fraction of a second in flight when a
- * transmission ends, and discarding it clips the last word off every single
- * one -- the kind of fault that ships and is then blamed on the network. The
- * wait is bounded by how much the device could possibly be holding.
+ * **There are two ways to stop, and the difference is audible.**
+ * `AudioTrack.stop()` in streaming mode plays out what it holds and then stops;
+ * `pause()` followed by `flush()` throws it away. Between the jitter buffer's
+ * cushion and the device's own there is always a fraction of a second in flight
+ * when a transmission ends, so which one is used decides whether the last word
+ * of every transmission is heard -- and, on a force interrupt, how long the
+ * device waits before playing whoever just cut in. [drainAndStop] is for the
+ * ending where the speaker finished and said so; [stop] for every ending that
+ * was imposed on them. The drain is bounded by how much the device could
+ * possibly be holding.
  */
 class AndroidAudioPlayer(
     context: Context,
@@ -153,24 +156,38 @@ class AndroidAudioPlayer(
     }
 
     override suspend fun stop() {
-        val current: AudioTrack
-        val written: Long
-        val bufferFrames: Int
-        synchronized(lock) {
-            current = track ?: return
-            track = null
-            written = framesWritten
-            bufferFrames = trackBufferFrames
-            framesWritten = 0L
-            trackBufferFrames = 0
-        }
+        val current = take() ?: return
+        withContext(Dispatchers.IO) { releaseTrack(current.track) }
+        logger.i(LogCategory.AUDIO) { "playback stopped" }
+    }
 
-        val waitMillis = withContext(Dispatchers.IO) { stopAndMeasure(current, written, bufferFrames) }
+    override suspend fun drainAndStop() {
+        val current = take() ?: return
+
+        val waitMillis = withContext(Dispatchers.IO) {
+            stopAndMeasure(current.track, current.framesWritten, current.bufferFrames)
+        }
         if (waitMillis > 0L) delay(waitMillis)
-        withContext(Dispatchers.IO) { releaseTrack(current) }
+        withContext(Dispatchers.IO) { releaseTrack(current.track) }
 
         logger.i(LogCategory.AUDIO) { "playback stopped after ${waitMillis}ms of playout" }
     }
+
+    /** Detaches the live track, so nothing can write to it while it is closing. */
+    private fun take(): Live? = synchronized(lock) {
+        val current = track ?: return null
+        val live = Live(current, framesWritten, trackBufferFrames)
+        track = null
+        framesWritten = 0L
+        trackBufferFrames = 0
+        live
+    }
+
+    private class Live(
+        val track: AudioTrack,
+        val framesWritten: Long,
+        val bufferFrames: Int,
+    )
 
     /**
      * Stops the device and reports how long what is queued needs to be heard.
