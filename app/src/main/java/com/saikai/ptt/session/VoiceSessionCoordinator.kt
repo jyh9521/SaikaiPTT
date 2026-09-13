@@ -6,6 +6,8 @@ import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.core.protocol.TerminationReason
 import com.saikai.ptt.core.session.SessionManager
 import com.saikai.ptt.core.session.SessionState
+import com.saikai.ptt.core.session.ReceptionStats
+import com.saikai.ptt.core.session.VoiceReceiver
 import com.saikai.ptt.core.session.VoiceTransmitter
 import com.saikai.ptt.network.InboundPacketRouter
 import com.saikai.ptt.service.VoiceSessionPowerLocks
@@ -38,9 +40,11 @@ class VoiceSessionCoordinator(
     private val router: InboundPacketRouter,
     private val listener: SessionPacketListener,
     private val transmitter: VoiceTransmitter,
+    private val receiver: VoiceReceiver,
     private val powerLocks: VoiceSessionPowerLocks,
     private val onTransmittingEnded: () -> Unit,
     private val publishSession: (SessionState) -> Unit,
+    private val publishReception: (ReceptionStats?) -> Unit,
     private val logger: Logger,
     private val scope: CoroutineScope,
 ) : LifecycleStep {
@@ -51,6 +55,9 @@ class VoiceSessionCoordinator(
 
     /** Whether the last observed state was one that holds the microphone. */
     private var transmitting = false
+
+    /** Whether the last observed state was a session at all. */
+    private var active = false
 
     override suspend fun start() {
         router.register(listener)
@@ -88,6 +95,13 @@ class VoiceSessionCoordinator(
         val nowTransmitting = state is SessionState.Requesting || state is SessionState.Transmitting
         if (transmitting && !nowTransmitting) onTransmittingEnded()
         transmitting = nowTransmitting
+
+        // On the edge out of a session, not on every change: by this point the
+        // receiver has closed and its numbers are final, and reading them
+        // mid-session would publish a count that is still moving.
+        val nowActive = state is SessionState.Active
+        if (active && !nowActive) publishReception(receiver.lastReception)
+        active = nowActive
 
         publishSession(state)
     }

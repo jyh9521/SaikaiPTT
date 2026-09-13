@@ -94,7 +94,11 @@ class SessionPacketListener(
                 // the frames still in the buffer are the last of the sentence.
                 val payload = inbound.packet.payload as? VoiceEndPayload
                 if (payload != null) {
-                    receiver.flush(header.sessionId, payload.finalDataSequence)
+                    receiver.flush(
+                        sessionId = header.sessionId,
+                        finalDataSequence = payload.finalDataSequence,
+                        frameCount = payload.frameCount,
+                    )
                 }
                 scope.launch { sessions.onVoiceEnd(sender, header.sessionId) }
             }

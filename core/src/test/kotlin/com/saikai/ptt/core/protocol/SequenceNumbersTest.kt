@@ -93,4 +93,35 @@ class SequenceNumbersTest {
         assertEquals(4_294_967_295L, SequenceNumbers.toUnsignedLong(minusOne))
         assertEquals(0L, SequenceNumbers.toUnsignedLong(0))
     }
+    @Test
+    fun `distance is signed, and correct across the wrap`() {
+        assertEquals(1, SequenceNumbers.distance(5, 4))
+        assertEquals(-1, SequenceNumbers.distance(4, 5))
+        assertEquals(0, SequenceNumbers.distance(7, 7))
+
+        // 0xFFFFFFFF is -1 as an Int and 0x00000001 is 1; the true distance is
+        // two, and this is the case a plain comparison gets backwards.
+        assertEquals(2, SequenceNumbers.distance(1, -1))
+        assertEquals(-2, SequenceNumbers.distance(-1, 1))
+
+        // And at the sign flip in the middle of the range.
+        assertEquals(3, SequenceNumbers.distance(0x80000002.toInt(), 0x7FFFFFFF))
+        assertEquals(-3, SequenceNumbers.distance(0x7FFFFFFF, 0x80000002.toInt()))
+    }
+
+    @Test
+    fun `distance agrees with isNewer`() {
+        val pairs = listOf(
+            5 to 4, 4 to 5, 1 to -1, -1 to 1,
+            0x80000002.toInt() to 0x7FFFFFFF, 0x7FFFFFFF to 0x80000002.toInt(),
+        )
+        for ((a, b) in pairs) {
+            assertEquals(
+                "distance and isNewer disagree about $a vs $b",
+                SequenceNumbers.isNewer(a, b),
+                SequenceNumbers.distance(a, b) > 0,
+            )
+        }
+    }
+
 }

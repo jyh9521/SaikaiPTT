@@ -30,6 +30,7 @@
     <string name="placeholder_service_stop">停止</string>
     <string name="placeholder_talk">押して話す</string>
     <string name="placeholder_session_label">セッション</string>
+    <string name="placeholder_reception_label">受信統計</string>
 
     <!-- Ongoing foreground-service notification. Replaced in Task31. -->
     <string name="notification_channel_communication">通信</string>

@@ -73,6 +73,20 @@ interface JitterBufferSink {
  *   even when every frame eventually arrives. The oldest are dropped, because
  *   dropping the newest would keep the latency and lose the audio as well.
  *
+ * ### Nothing here trusts the sequence number
+ *
+ * It arrives from a device on a LAN this app does not control, inside a session
+ * that has only been checked for identity, so every arithmetic decision here is
+ * made with [SequenceNumbers.distance] rather than `>` and is bounded by
+ * something that does not depend on the value. A sequence far enough ahead to
+ * be impossible is refused outright: no transmission can outlast the session's
+ * own five-minute cap, so anything beyond that many frames is not a jump, it is
+ * a peer talking nonsense. What is left is resynchronised in one pass over the
+ * ring rather than one step per skipped frame, so the cost of a jump is fixed
+ * whatever its size. Both matter for the same reason: this runs on the voice
+ * receive thread, and a loop that walks two billion times there does not crash,
+ * it stops the device receiving anything at all.
+ *
  * Not thread-safe. It belongs to whatever holds the receiver's lock.
  */
 class JitterBuffer(
@@ -116,8 +130,28 @@ class JitterBuffer(
     var droppedOverflow: Int = 0
         private set
 
+    /** Frames whose sequence number could not belong to this session at all. */
+    var droppedImplausible: Int = 0
+        private set
+
+    /**
+     * The furthest ahead a frame can be and still be believable.
+     *
+     * One session's worth of frames. Beyond it the number is not a gap in a
+     * stream, it is a peer sending something that cannot be true, and acting on
+     * it would mean throwing away a buffer full of real audio on its say-so.
+     */
+    private val horizonFrames: Int = (
+        config.session.maxDuration.inWholeMilliseconds /
+            config.audio.frameDuration.inWholeMilliseconds
+        ).toInt().coerceAtLeast(capacity)
+
     /** Frames held, waiting either for their turn or for a gap ahead of them. */
     val depth: Int get() = held
+
+    /** Set by [flush]: frames the sender counted that never reached this device. */
+    var neverArrived: Int = 0
+        private set
 
     /**
      * Takes one arriving frame and plays out whatever that makes possible.
@@ -131,19 +165,25 @@ class JitterBuffer(
             return
         }
 
-        val distance = sequence - nextToPlay
+        val distance = SequenceNumbers.distance(sequence, nextToPlay)
         if (distance < 0) {
             // Its turn has passed. Playing it now would be audio out of order,
             // which is worse than the gap that was already filled for it.
             droppedLate++
             return
         }
+        if (distance >= horizonFrames) {
+            droppedImplausible++
+            logger.throttled(LogLevel.WARN, LogCategory.SESSION, "jitter-implausible") {
+                "a peer sent sequence $sequence while $nextToPlay was expected; ignored"
+            }
+            return
+        }
 
         // Far enough ahead that it cannot be stored without exceeding the
         // maximum depth. Give up the oldest audio rather than the newest.
-        while (sequence - nextToPlay >= capacity) {
-            discardOldest()
-        }
+        val overshoot = distance - (capacity - 1)
+        if (overshoot > 0) discardOldest(overshoot)
 
         val slot = slotOf(sequence)
         if (occupied[slot] && sequences[slot] == sequence) {
@@ -172,23 +212,19 @@ class JitterBuffer(
      */
     fun flush(finalDataSequence: Int) {
         isPriming = false
-        val last = if (SequenceNumbers.isNewer(finalDataSequence, highest)) {
-            highest
-        } else {
-            finalDataSequence
-        }
 
-        while (last - nextToPlay >= 0) {
+        // Out to the newest frame that actually arrived, and no further. What
+        // the sender says it sent is a count, not an instruction: everything
+        // past [highest] is gone rather than late, and manufacturing a second
+        // of concealment for it would be worse than the silence it replaces.
+        // Taking the sender's number as the stopping point would also let a
+        // peer suppress the tail by understating it.
+        while (SequenceNumbers.distance(highest, nextToPlay) >= 0) {
             val slot = slotOf(nextToPlay)
             if (occupied[slot] && sequences[slot] == nextToPlay) play(slot) else fillGap()
         }
 
-        val missing = finalDataSequence - highest
-        logger.i(LogCategory.SESSION) {
-            "playout done: $played played, $concealed concealed, $droppedLate late, " +
-                "$droppedOverflow dropped" +
-                if (missing > 0) ", $missing never arrived" else ""
-        }
+        neverArrived = SequenceNumbers.distance(finalDataSequence, highest).coerceAtLeast(0)
     }
 
     // --- Internals -------------------------------------------------------------------
@@ -207,7 +243,8 @@ class JitterBuffer(
                 // Three newer frames have arrived while this one has not. At
                 // fifty frames a second that is the 60 ms the config allows a
                 // straggler; everything behind it has waited long enough.
-                highest - nextToPlay >= config.jitterBuffer.targetFrames -> fillGap()
+                SequenceNumbers.distance(highest, nextToPlay) >=
+                    config.jitterBuffer.targetFrames -> fillGap()
 
                 else -> return
             }
@@ -237,16 +274,32 @@ class JitterBuffer(
         concealed++
     }
 
-    private fun discardOldest() {
-        val slot = slotOf(nextToPlay)
-        if (occupied[slot] && sequences[slot] == nextToPlay) {
-            occupied[slot] = false
-            held--
+    /**
+     * Gives up the [count] oldest frames, heard or not, in one pass.
+     *
+     * One pass rather than one step per frame: [count] is bounded only by the
+     * horizon, and this runs on the voice receive thread. Past a ring's worth
+     * there is nothing left to examine anyway -- every slot is stale -- so the
+     * work is capped at the ring size however large the jump.
+     */
+    private fun discardOldest(count: Int) {
+        droppedOverflow += count
+        if (count >= capacity) {
+            occupied.fill(false)
+            held = 0
+        } else {
+            for (step in 0 until count) {
+                val sequence = nextToPlay + step
+                val slot = slotOf(sequence)
+                if (occupied[slot] && sequences[slot] == sequence) {
+                    occupied[slot] = false
+                    held--
+                }
+            }
         }
-        nextToPlay++
-        droppedOverflow++
+        nextToPlay += count
         logger.throttled(LogLevel.WARN, LogCategory.SESSION, "jitter-overflow") {
-            "the jitter buffer is full; dropping the oldest frame to keep latency bounded"
+            "the jitter buffer overflowed; dropped $count frames to keep latency bounded"
         }
     }
 

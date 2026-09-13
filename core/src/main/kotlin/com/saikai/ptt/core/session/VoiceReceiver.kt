@@ -63,6 +63,18 @@ class VoiceReceiver(
     var strayFrames: Long = 0L
         private set
 
+    /**
+     * How the last transmission went, once it is over.
+     *
+     * Kept after the session closes on purpose: the numbers are only
+     * interesting once there is nothing left to add to them, and by then the
+     * session is gone. `docs/01_PRD.md` wants them in the debug log and on a
+     * developer page; the log line is written here and the page reads this.
+     */
+    @Volatile
+    var lastReception: ReceptionStats? = null
+        private set
+
     /** True while a transmission is being played out. */
     val isOpen: Boolean get() = synchronized(lock) { session != null }
 
@@ -111,11 +123,13 @@ class VoiceReceiver(
      * machine: by the time the machine has finished with VOICE_END the speaker
      * is already being taken away.
      */
-    fun flush(sessionId: SessionId, finalDataSequence: Int) = synchronized(lock) {
-        val current = session ?: return
-        if (current.sessionId != sessionId) return
-        current.buffer.flush(finalDataSequence)
-    }
+    fun flush(sessionId: SessionId, finalDataSequence: Int, frameCount: Int) =
+        synchronized(lock) {
+            val current = session ?: return
+            if (current.sessionId != sessionId) return
+            current.buffer.flush(finalDataSequence)
+            report(current, frameCount)
+        }
 
     /** The session is over, however it ended. */
     fun close() = synchronized(lock) {
@@ -124,8 +138,30 @@ class VoiceReceiver(
     }
 
     private fun close(current: Open) {
+        // A session that ended without a VOICE_END -- interrupted, timed out,
+        // the network gone -- still has numbers worth keeping. There is no
+        // frame count to compare against, so the loss percentage is left out
+        // rather than invented.
+        if (lastReception?.sessionId != current.sessionId) report(current, expected = 0)
         current.codec.release()
         if (session === current) session = null
+    }
+
+    /** Caller holds the lock. */
+    private fun report(current: Open, expected: Int) {
+        val buffer = current.buffer
+        val stats = ReceptionStats(
+            sessionId = current.sessionId,
+            expectedFrames = expected,
+            played = buffer.played,
+            concealed = buffer.concealed,
+            droppedLate = buffer.droppedLate,
+            droppedOverflow = buffer.droppedOverflow,
+            droppedImplausible = buffer.droppedImplausible,
+            neverArrived = buffer.neverArrived,
+        )
+        lastReception = stats
+        logger.i(LogCategory.SESSION) { "reception: $stats" }
     }
 
     private inner class Open(

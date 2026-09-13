@@ -1,6 +1,7 @@
 package com.saikai.ptt.service
 
 import com.saikai.ptt.core.domain.Peer
+import com.saikai.ptt.core.session.ReceptionStats
 import com.saikai.ptt.core.session.SessionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,22 @@ class ServiceStatus {
 
     fun publishSession(state: SessionState) {
         _session.value = state
+    }
+
+    private val _lastReception = MutableStateFlow<ReceptionStats?>(null)
+
+    /**
+     * How the last incoming transmission went.
+     *
+     * `docs/01_PRD.md` asks for the loss count on a developer information page.
+     * That page is Task35; this is where it will read from, and the debug
+     * screen shows it in the meantime. Kept after the session ends, because the
+     * numbers are only complete once there is nothing left to add to them.
+     */
+    val lastReception: StateFlow<ReceptionStats?> = _lastReception.asStateFlow()
+
+    fun publishReception(stats: ReceptionStats?) {
+        if (stats != null) _lastReception.value = stats
     }
 
     fun publish(state: ServiceState) {

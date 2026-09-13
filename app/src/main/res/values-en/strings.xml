@@ -14,6 +14,7 @@
     <string name="placeholder_service_stop">Stop</string>
     <string name="placeholder_talk">Hold to talk</string>
     <string name="placeholder_session_label">Session</string>
+    <string name="placeholder_reception_label">Reception</string>
 
     <string name="notification_channel_communication">Communication</string>
     <string name="notification_channel_communication_description">Shown so the app can keep receiving</string>

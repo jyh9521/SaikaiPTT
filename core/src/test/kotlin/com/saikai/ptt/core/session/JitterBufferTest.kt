@@ -210,6 +210,74 @@ class JitterBufferTest {
     }
 
     @Test
+    fun `a sequence that cannot belong to this session is ignored`() {
+        // Reached only via a peer already inside a validated session, so it is
+        // a buggy or hostile one -- but the cost of believing it would be a
+        // resynchronisation loop two billion steps long, on the thread that
+        // keeps this device on the network.
+        prime()
+        played.clear()
+
+        buffer.offer(0x4000_0000, ByteArray(40), 0, 40)
+
+        assertEquals(1, buffer.droppedImplausible)
+        assertEquals(0, buffer.droppedOverflow)
+        assertEquals(emptyList<String>(), played)
+
+        // And the stream carries on as if it had never appeared.
+        offer(4)
+        assertEquals(listOf("4"), played)
+    }
+
+    @Test
+    fun `a jump costs one pass over the ring, not one step per frame`() {
+        // The bound is what matters, not the numbers: a plausible but large
+        // jump has to resynchronise in fixed time.
+        prime()
+        played.clear()
+
+        offer(5_000)
+
+        assertEquals(4_987, buffer.droppedOverflow)
+        assertEquals(0, buffer.droppedImplausible)
+        assertEquals(1, buffer.depth)
+    }
+
+    @Test
+    fun `playback keeps working across the wrap at two to the thirty-two`() {
+        // A real session cannot reach the boundary: frames are numbered from
+        // one and a transmission is capped at five minutes. The comparison
+        // still has to be the wrap-safe one -- ADR-003 forbids `a > b` outright
+        // -- and a buffer that used it would, at the boundary, decide every
+        // remaining frame was ancient history and play none of them.
+        //
+        // Walking there is the only way to show it, so the buffer is driven
+        // forward in believable jumps until its playout point crosses.
+        val step = 14_000 // inside the horizon, so each jump is one it accepts
+        var sequence = 1
+        while (sequence > 0) {
+            buffer.offer(sequence, ByteArray(40) { sequence.toByte() }, 0, 40)
+            sequence += step
+        }
+        // `sequence` is now negative as an Int: past 2^31, into the half of the
+        // range where signed comparison gives the wrong answer.
+        played.clear()
+
+        for (offset in 0 until 6) {
+            val next = sequence + offset
+            buffer.offer(next, ByteArray(40) { (offset + 1).toByte() }, 0, 40)
+        }
+
+        // The tail of the run is what matters: the six contiguous frames are
+        // played in order, on the far side of the boundary. What precedes them
+        // is the buffer resynchronising from the last jump, which is the same
+        // thing it does anywhere else in the range.
+        assertEquals(listOf("1", "2", "3", "4", "5", "6"), played.takeLast(6))
+        assertEquals(0, buffer.droppedLate)
+        assertEquals(0, buffer.droppedImplausible)
+    }
+
+    @Test
     fun `flush does not invent audio for frames that never arrived`() {
         // The sender says it sent a hundred; frame 5 is the newest that reached
         // this device. The other ninety-five are gone rather than late, and
@@ -223,6 +291,22 @@ class JitterBufferTest {
 
         assertEquals(listOf("fec:5", "5"), played)
         assertEquals(1, buffer.concealed)
+        assertEquals(95, buffer.neverArrived)
+    }
+
+    @Test
+    fun `a sender that understates what it sent cannot suppress the tail`() {
+        // The frame count is a count, not an instruction about where to stop.
+        // Stopping where the sender says would let a peer -- or a corrupted
+        // VOICE_END -- silently cut the end off a transmission that arrived
+        // intact.
+        offer(1)
+        offer(2)
+
+        buffer.flush(finalDataSequence = 1)
+
+        assertEquals(listOf("1", "2"), played)
+        assertEquals(0, buffer.neverArrived)
     }
 
     @Test

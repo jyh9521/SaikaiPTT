@@ -213,9 +213,11 @@ class ServiceContainer(
         router = router,
         listener = SessionPacketListener(sessions, receiver, peers, app.logger, scope),
         transmitter = transmitter,
+        receiver = receiver,
         powerLocks = powerLocks,
         onTransmittingEnded = { notifications.demoteFromMicrophone(service) },
         publishSession = app.serviceStatus::publishSession,
+        publishReception = app.serviceStatus::publishReception,
         logger = app.logger,
         scope = scope,
     )

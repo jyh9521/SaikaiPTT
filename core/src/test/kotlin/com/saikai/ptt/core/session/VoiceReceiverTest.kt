@@ -97,13 +97,13 @@ class VoiceReceiverTest {
 
         // Flushing at 3 has to fill 2, and the frame after 2 is 3 -- which is
         // held, so this is still FEC. Losing the tail instead:
-        subject.flush(session, finalDataSequence = 3)
+        subject.flush(session, finalDataSequence = 3, frameCount = 3)
         player.clear()
 
         subject.close()
         subject.open(session)
         offer(2)
-        subject.flush(session, finalDataSequence = 2)
+        subject.flush(session, finalDataSequence = 2, frameCount = 2)
 
         // Frame 1 was never received and 2 is the follower, so FEC again --
         // the concealment path needs a gap with nothing behind it.
@@ -180,6 +180,41 @@ class VoiceReceiverTest {
         subject.close()
         assertTrue(codec.released)
         assertFalse(subject.isOpen)
+    }
+
+    @Test
+    fun `the transmission is reported once it is over`() {
+        subject.open(session)
+        offer(1)
+        offer(2)
+        offer(4)
+        subject.flush(session, finalDataSequence = 10, frameCount = 10)
+
+        val stats = subject.lastReception!!
+        assertEquals(session, stats.sessionId)
+        assertEquals(10, stats.expectedFrames)
+        // 1, 2 and 4 played, 3 concealed, 5..10 never arrived.
+        assertEquals(3, stats.played)
+        assertEquals(1, stats.concealed)
+        assertEquals(6, stats.neverArrived)
+        assertEquals(7, stats.lost)
+        assertEquals(70.0, stats.lossPercent, 0.01)
+    }
+
+    @Test
+    fun `a session cut short is still reported, without a loss percentage`() {
+        // No VOICE_END means no frame count to compare against, so the
+        // percentage is left out rather than invented.
+        subject.open(session)
+        offer(1)
+        offer(2)
+        offer(3)
+        subject.close()
+
+        val stats = subject.lastReception!!
+        assertEquals(3, stats.played)
+        assertEquals(0, stats.expectedFrames)
+        assertEquals(0.0, stats.lossPercent, 0.01)
     }
 
     @Test

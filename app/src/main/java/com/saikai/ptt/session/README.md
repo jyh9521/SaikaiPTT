@@ -36,3 +36,10 @@ BUSY、无应答、松手、被强插、WiFi 掉线、来电抢走音频焦点�
 
 `peerState` 与「立刻补一次心跳」不需要在这里做——`SessionManager.busy` 直接喂给
 `UdpPresenceAnnouncer`（Task25 接好的），忙线标志一变它就补播一次（Task17）。
+
+## 接收统计（Task27）
+
+`VoiceSessionCoordinator` 在**离开会话的那条边**上把 `VoiceReceiver.lastReception`
+发布出去，不是每次状态变化都发：到那一刻接收侧已经关闭、数字才是最终值，中途读到的
+是还在动的计数。发布目标是 `ServiceStatus`，开发者信息页（Task35）从那里读，
+在那之前调试界面显示同样的一行。

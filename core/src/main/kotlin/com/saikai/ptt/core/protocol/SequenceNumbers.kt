@@ -43,6 +43,21 @@ object SequenceNumbers {
         return difference in 1L until HALF
     }
 
+    /**
+     * How far [a] is ahead of [b], as a signed count of packets.
+     *
+     * Negative when [a] is older, zero when they are the same. Correct across
+     * the wrap at 2^32, because Int subtraction wraps exactly as the counter
+     * does for any true distance below 2^31 -- and every distance this protocol
+     * can produce is far below it, since a session is capped at five minutes.
+     *
+     * It exists so that the arithmetic reads as what it is. `a - b` on two
+     * sequence numbers looks like the bug [isNewer] was written to prevent, and
+     * the alternative -- spelling it out with a comment at every site -- is how
+     * one of those sites ends up without the comment.
+     */
+    fun distance(a: Int, b: Int): Int = a - b
+
     /** The next sequence number. Wraps naturally at 2^32. */
     fun next(sequence: Int): Int = sequence + 1
 

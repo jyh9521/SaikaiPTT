@@ -46,6 +46,7 @@ import com.saikai.ptt.core.domain.AppLanguage
 import com.saikai.ptt.core.domain.AudioPlayer
 import com.saikai.ptt.core.domain.AudioRecorder
 import com.saikai.ptt.core.domain.Peer
+import com.saikai.ptt.core.session.ReceptionStats
 import com.saikai.ptt.core.session.SessionState
 import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.service.CommunicationService
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
                 val serviceState by container.serviceStatus.state.collectAsState()
                 val peers by container.serviceStatus.peers.collectAsState()
                 val session by container.serviceStatus.session.collectAsState()
+                val reception by container.serviceStatus.lastReception.collectAsState()
                 val activeUser by container.localUsers.activeUser.collectAsState(initial = null)
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -105,6 +107,7 @@ class MainActivity : ComponentActivity() {
                         peers = peers,
                         activeUserName = activeUser?.displayName,
                         session = session,
+                        reception = reception,
                         onTalkPress = { peer ->
                             when (val outcome = container.ptt.press(peer)) {
                                 is Outcome.Success -> ""
@@ -162,6 +165,7 @@ private fun PlaceholderScreen(
     peers: List<Peer>,
     activeUserName: String?,
     session: SessionState,
+    reception: ReceptionStats?,
     onTalkPress: suspend (Peer) -> String,
     onTalkRelease: suspend () -> Unit,
     onProbeMicrophone: suspend () -> String,
@@ -249,6 +253,17 @@ private fun PlaceholderScreen(
                     session.javaClass.simpleName + talkError,
                 style = MaterialTheme.typography.labelMedium,
             )
+            // The loss figures PRD section 44 wants on a developer page. The
+            // page itself is Task35; this is the same numbers, in the place
+            // that already exists.
+            reception?.let {
+                Text(
+                    text = "${stringResource(R.string.placeholder_reception_label)}: $it",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             Text(
                 text = "${stringResource(R.string.placeholder_peers_label)} (${peers.size})",
                 style = MaterialTheme.typography.labelMedium,
@@ -505,6 +520,7 @@ private fun PlaceholderScreenPreview() {
             peers = emptyList(),
             activeUserName = null,
             session = SessionState.Idle,
+            reception = null,
             onTalkPress = { "" },
             onTalkRelease = {},
             onProbeMicrophone = { "" },
