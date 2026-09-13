@@ -1,5 +1,6 @@
 package com.saikai.ptt.core.session
 
+import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.config.LoggingConfig
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.Peer
@@ -127,9 +128,9 @@ class SessionManagerTest {
     @Test
     fun `a refusal ends the attempt without a recording`() = runTest {
         val manager = manager()
-        manager.requestTalk(bob)
+        val session = (manager.requestTalk(bob) as Outcome.Success).value
 
-        manager.onBusy(bob.deviceId)
+        manager.onBusy(bob.deviceId, session)
 
         assertEquals(SessionState.Idle, manager.state.value)
         assertFalse(audio.capturing)
@@ -342,6 +343,45 @@ class SessionManagerTest {
         assertEquals(1, signals.count("VOICE_ACCEPT"))
         assertEquals(first, (manager.state.value as SessionState.Active).sessionId)
         assertEquals("Bob", (manager.state.value as SessionState.Active).peerName)
+    }
+
+    @Test
+    fun `a refusal names the session the caller asked about`() = runTest {
+        // The caller's own id, echoed. It is what lets the caller tell this
+        // answer from one left over from an attempt it has already abandoned,
+        // and it discloses nothing: the session this device is really in never
+        // goes on the wire.
+        val manager = manager()
+        val theirs = SessionId.random()
+        manager.onVoiceStart(bob.deviceId, SessionId.random(), voiceStart("Bob"), bob.endpoint)
+
+        manager.onVoiceStart(carol.deviceId, theirs, voiceStart("Carol"), carol.endpoint)
+
+        assertTrue(
+            "expected a BUSY naming $theirs, got ${signals.snapshot()}",
+            signals.snapshot().contains("BUSY $theirs -> ${carol.deviceId}"),
+        )
+    }
+
+    @Test
+    fun `a refusal left over from an abandoned attempt does not fail the next one`() = runTest {
+        // The first press timed out and was given up on. The peer's answer to
+        // it arrives afterwards, while the user is part-way through a second
+        // press -- and without the session id it would look exactly like an
+        // answer to that one.
+        val manager = manager()
+        val abandoned = (manager.requestTalk(bob) as Outcome.Success).value
+        advanceTimeBy(config.session.voiceStartTimeout.inWholeMilliseconds + 100)
+        assertEquals(SessionState.Idle, manager.state.value)
+
+        manager.requestTalk(bob)
+        runCurrent()
+        outcomes.clear()
+
+        manager.onBusy(bob.deviceId, abandoned)
+
+        assertTrue(manager.state.value is SessionState.Requesting)
+        assertTrue("a stale refusal was acted on: ${emitted()}", emitted().isEmpty())
     }
 
     @Test

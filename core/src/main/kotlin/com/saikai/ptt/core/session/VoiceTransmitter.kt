@@ -120,9 +120,18 @@ class VoiceTransmitter(
         return sink.sendControl(packetizer.controlDatagram, length, endpoint.address)
     }
 
-    /** Carries no session id: the request was refused, so none was created. */
-    override suspend fun busy(target: DeviceId, endpoint: PeerEndpoint): Boolean =
-        sendControlPacket(PacketType.BUSY, target, SessionId.ZERO, EmptyPayload, endpoint)
+    /**
+     * Refuses a request, naming the caller's own session and nothing else.
+     *
+     * The payload stays empty: the session this device is actually in is never
+     * put on the wire, because it would tell whoever is listening who is
+     * talking to whom (ADR-003 section 4).
+     */
+    override suspend fun busy(
+        sessionId: SessionId,
+        target: DeviceId,
+        endpoint: PeerEndpoint,
+    ): Boolean = sendControlPacket(PacketType.BUSY, target, sessionId, EmptyPayload, endpoint)
 
     /**
      * Closes the stream and sends VOICE_END, carrying the counts the packetizer

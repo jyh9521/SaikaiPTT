@@ -40,8 +40,11 @@ internal class RecordingSignals(private val sendSucceeds: () -> Boolean = { true
         endpoint: PeerEndpoint,
     ): Boolean = record("VOICE_ACCEPT $sessionId -> $target")
 
-    override suspend fun busy(target: DeviceId, endpoint: PeerEndpoint): Boolean =
-        record("BUSY -> $target")
+    override suspend fun busy(
+        sessionId: SessionId,
+        target: DeviceId,
+        endpoint: PeerEndpoint,
+    ): Boolean = record("BUSY $sessionId -> $target")
 
     override suspend fun voiceEnd(
         sessionId: SessionId,

@@ -86,7 +86,7 @@ class SessionPacketListener(
                 sessions.onVoiceAccept(sender, header.sessionId)
             }
 
-            PacketType.BUSY -> scope.launch { sessions.onBusy(sender) }
+            PacketType.BUSY -> scope.launch { sessions.onBusy(sender, header.sessionId) }
 
             PacketType.VOICE_END -> {
                 // Play out what is held *before* handing the machine the end of

@@ -301,15 +301,35 @@ class VoiceTransmitterTest {
     }
 
     @Test
-    fun `busy carries no session id`() {
-        // Returning the active session would tell the caller who this device is
-        // talking to (ADR-003 section 4).
-        completing { subject.busy(peer, endpoint) }
+    fun `busy echoes the caller's own session and discloses nothing else`() {
+        // The caller's id, so it can tell this refusal from a stale one. Never
+        // the session this device is actually in, and never in the payload:
+        // that would tell whoever is listening who is talking to whom
+        // (ADR-003 section 4).
+        val theirs = SessionId.random()
+        completing { subject.busy(theirs, peer, endpoint) }
 
         val packet = sink.control.single()
         assertEquals(PacketType.BUSY, packet.type)
-        assertEquals(SessionId.ZERO, packet.header.sessionId)
+        assertEquals(theirs, packet.header.sessionId)
         assertEquals(EmptyPayload, packet.payload)
+        assertEquals(0, packet.header.sequenceNumber)
+    }
+
+    @Test
+    fun `refusing a caller does not disturb this device's own transmission`() {
+        // Busy mode has to be free: the packet that refuses somebody else goes
+        // out on its own buffer, and the stream in progress carries on
+        // numbering from where it was.
+        start()
+        accept()
+        capture(1)
+        completing { subject.busy(SessionId.random(), peer, endpoint) }
+        capture(2)
+        end()
+
+        assertEquals(listOf(1, 2), sink.voice.map { it.header.sequenceNumber })
+        assertEquals(VoiceEndPayload(2, 2), sink.control.last().payload)
     }
 
     @Test

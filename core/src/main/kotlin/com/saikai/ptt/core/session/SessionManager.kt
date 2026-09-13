@@ -220,7 +220,7 @@ class SessionManager(
                     "refusing ${LogFormat.userName(payload.userName)}: " +
                         "${payload.codec} ${payload.sampleRateHz}Hz ${payload.frameMillis}ms"
                 }
-                signals.busy(sender, endpoint)
+                signals.busy(sessionId, sender, endpoint)
                 return
             }
 
@@ -239,7 +239,7 @@ class SessionManager(
                         logger.i(LogCategory.SESSION) {
                             "busy: refusing ${LogFormat.userName(payload.userName)}"
                         }
-                        signals.busy(sender, endpoint)
+                        signals.busy(sessionId, sender, endpoint)
                     }
 
                     else -> {
@@ -286,11 +286,17 @@ class SessionManager(
         }
     }
 
-    /** The peer is in a call and does not allow interruption. */
-    suspend fun onBusy(sender: DeviceId) {
+    /**
+     * The peer is in a call and does not allow interruption.
+     *
+     * [sessionId] is this device's own, echoed back by the peer. Checking it
+     * is what keeps a late refusal from the previous attempt -- one that timed
+     * out and was abandoned -- from failing the request the user has just made.
+     */
+    suspend fun onBusy(sender: DeviceId, sessionId: SessionId) {
         mutex.withLock {
             val current = _state.value as? SessionState.Requesting ?: return
-            if (current.peer != sender) return
+            if (current.peer != sender || current.sessionId != sessionId) return
             cancelTimer()
             audio.stopCapture()
             finish(SessionOutcome.SendFailed(
@@ -368,7 +374,7 @@ class SessionManager(
             // accepting would tell the speaker they were heard while playing
             // silence.
             logger.w(LogCategory.SESSION) { "cannot open the speaker; refusing the session" }
-            signals.busy(sender, endpoint)
+            signals.busy(sessionId, sender, endpoint)
             return
         }
         enter(

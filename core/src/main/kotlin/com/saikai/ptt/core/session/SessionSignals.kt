@@ -36,8 +36,24 @@ interface SessionSignals {
         endpoint: PeerEndpoint,
     ): Boolean
 
-    /** Carries no session id: the request was refused, so none was created. */
-    suspend fun busy(target: DeviceId, endpoint: PeerEndpoint): Boolean
+    /**
+     * Refuses a request.
+     *
+     * [sessionId] is the id the *caller* put in its VOICE_START, echoed back.
+     * Not the session this device is actually in -- that one is never disclosed,
+     * because it would tell any device on the LAN who is talking to whom
+     * (ADR-003 section 4 keeps the payload empty for the same reason).
+     *
+     * Echoing the caller's own id costs nothing and is what lets it tell this
+     * refusal from a stale one. A caller whose first request timed out and who
+     * has since pressed again would otherwise take the late BUSY from the
+     * abandoned attempt as the answer to the new one.
+     */
+    suspend fun busy(
+        sessionId: SessionId,
+        target: DeviceId,
+        endpoint: PeerEndpoint,
+    ): Boolean
 
     /**
      * Ends the transmission.
