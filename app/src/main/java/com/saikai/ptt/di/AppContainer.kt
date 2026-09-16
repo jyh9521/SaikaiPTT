@@ -22,6 +22,12 @@ import com.saikai.ptt.usecase.ObserveSession
 import com.saikai.ptt.usecase.SetServiceRunning
 import com.saikai.ptt.usecase.StartPtt
 import com.saikai.ptt.usecase.StopPtt
+import com.saikai.ptt.usecase.CreateLocalUser
+import com.saikai.ptt.usecase.DeleteLocalUser
+import com.saikai.ptt.usecase.ObserveLocalUsers
+import com.saikai.ptt.usecase.RenameLocalUser
+import com.saikai.ptt.usecase.SwitchActiveUser
+import com.saikai.ptt.usecase.UserUseCases
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -142,6 +148,25 @@ class AppContainer(
             startPtt = StartPtt(ptt),
             stopPtt = StopPtt(ptt),
             setServiceRunning = SetServiceRunning(),
+        )
+    }
+
+    /**
+     * Everything the name screens are allowed to do.
+     *
+     * Separate from [homeUseCases] rather than merged into one bundle, because
+     * the two screens have nothing in common beyond the active name: Home never
+     * deletes a user and the name screens never open a session, and a single
+     * bundle would hand each of them the other's reach.
+     */
+    val userUseCases: UserUseCases by lazy {
+        UserUseCases(
+            observeUsers = ObserveLocalUsers(localUsers),
+            observeActiveUser = ObserveActiveUser(localUsers),
+            createUser = CreateLocalUser(localUsers),
+            renameUser = RenameLocalUser(localUsers),
+            deleteUser = DeleteLocalUser(localUsers),
+            switchActiveUser = SwitchActiveUser(localUsers, serviceStatus),
         )
     }
 

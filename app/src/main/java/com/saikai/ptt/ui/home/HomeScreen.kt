@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -88,6 +89,7 @@ fun HomeScreen(
     target: StateFlow<TargetState>,
     ptt: StateFlow<PttState>,
     onSelectPeer: (DeviceId) -> Unit,
+    onOpenUsers: () -> Unit,
     onPressTalk: () -> Unit,
     onReleaseTalk: () -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
@@ -98,7 +100,7 @@ fun HomeScreen(
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        HeaderSection(header, onSetServiceRunning)
+        HeaderSection(header, onOpenUsers, onSetServiceRunning)
         debugExtras()
 
         Text(
@@ -131,6 +133,7 @@ fun HomeScreen(
 @Composable
 private fun HeaderSection(
     header: StateFlow<HomeHeader>,
+    onOpenUsers: () -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
 ) {
     val state by header.collectAsState()
@@ -140,12 +143,30 @@ private fun HeaderSection(
             text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineSmall,
         )
-        Text(
-            text = state.activeUserName
-                ?.let { stringResource(R.string.home_active_user, it) }
-                ?: stringResource(R.string.home_no_active_user),
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        // Tapping the name opens the name screen (`docs/04_UI_UX.md` section
+        // 10). The trailing word is there because a line of text that happens
+        // to be tappable is a line of text nobody taps.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenUsers)
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = state.activeUserName
+                    ?.let { stringResource(R.string.home_active_user, it) }
+                    ?: stringResource(R.string.home_no_active_user),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringResource(R.string.home_change_user),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         ConnectionLine(state.connection, onSetServiceRunning)
     }
 }
@@ -563,6 +584,7 @@ private fun HomeScreenPreview() {
             target = MutableStateFlow(TargetState(rows[0].deviceId, "山田")),
             ptt = MutableStateFlow(PttState(PttPhase.READY, "山田", null)),
             onSelectPeer = {},
+            onOpenUsers = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},
@@ -580,6 +602,7 @@ private fun HomeScreenOfflinePreview() {
             target = MutableStateFlow(TargetState(null, null)),
             ptt = MutableStateFlow(PttState(PttPhase.UNAVAILABLE, null, PttMessage.TARGET_BUSY)),
             onSelectPeer = {},
+            onOpenUsers = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},

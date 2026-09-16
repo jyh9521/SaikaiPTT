@@ -17,6 +17,39 @@
     <string name="home_selected">Selected</string>
     <string name="home_target">Talking to: %1$s</string>
     <string name="home_target_none">Choose someone to talk to</string>
+    <string name="home_change_user">Change</string>
+
+    <string name="welcome_title">Welcome</string>
+    <string name="welcome_description">Create the name you will use. Other devices will see it.</string>
+    <string name="welcome_create">Create</string>
+
+    <string name="user_screen_title">Names</string>
+    <string name="user_name_label">Name</string>
+    <string name="user_name_counter">%1$d / %2$d</string>
+    <string name="user_name_too_long">Use %1$d characters or fewer.</string>
+    <string name="user_name_too_long_in_bytes">This name is too long. Please shorten it.</string>
+    <string name="user_in_use">In use</string>
+    <string name="user_add">Add a name</string>
+    <string name="user_edit">Edit</string>
+    <string name="user_edit_title">Edit name</string>
+    <string name="user_delete">Delete</string>
+    <string name="user_delete_title">Delete this name?</string>
+    <string name="user_delete_body">"%1$s" will be deleted. This cannot be undone.</string>
+    <string name="user_delete_confirm">Delete</string>
+    <string name="user_discard_title">Discard changes?</string>
+    <string name="user_discard_body">There are unsaved changes.</string>
+    <string name="user_discard_confirm">Discard</string>
+
+    <string name="user_message_in_call">You can switch once the call ends.</string>
+    <string name="user_message_cannot_delete_last">The last name cannot be deleted.</string>
+    <string name="user_message_cannot_delete_active">The name in use cannot be deleted. Switch first.</string>
+    <string name="user_message_not_found">That name no longer exists.</string>
+    <string name="user_message_name_blank">Enter a name.</string>
+    <string name="user_message_name_rejected">That name cannot be used.</string>
+
+    <string name="action_back">Back</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
 
     <string name="peer_state_online">Online</string>
     <string name="peer_state_busy">In a call</string>
@@ -40,8 +73,6 @@
     <string name="ptt_message_already_in_session">Already in a call.</string>
     <string name="ptt_message_interrupted">The call was interrupted.</string>
 
-    <string name="debug_name_label">Name</string>
-    <string name="debug_name_set">Set</string>
     <string name="debug_language_label">Display language</string>
     <string name="debug_service_stop">Stop service</string>
 

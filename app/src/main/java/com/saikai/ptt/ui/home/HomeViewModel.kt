@@ -76,8 +76,22 @@ class HomeViewModel(private val useCases: HomeUseCases) : ViewModel() {
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ConnectionState.STOPPED)
 
+    /**
+     * The name this device speaks under, or null before one is chosen.
+     *
+     * Its own flow because two things read it and they want different parts:
+     * the header shows the text, and [ptt] only needs to know whether there is
+     * one. Mapped to the display name first, so a rename that changes nothing
+     * visible -- there is no such thing today, but `updatedAt` moves on every
+     * write -- cannot republish either of them.
+     */
+    private val activeName: StateFlow<String?> = useCases.observeActiveUser()
+        .map { it?.displayName }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val header: StateFlow<HomeHeader> = combine(
-        useCases.observeActiveUser().map { it?.displayName }.distinctUntilChanged(),
+        activeName,
         connection,
     ) { name, state -> HomeHeader(name, state) }
         .distinctUntilChanged()
@@ -110,7 +124,12 @@ class HomeViewModel(private val useCases: HomeUseCases) : ViewModel() {
         target,
         connection,
         message,
-    ) { session, chosen, state, note -> pttState(session, chosen, state, note) }
+        // Without a name there is nothing to put in VOICE_START, and the
+        // session machine refuses with NO_LOCAL_NAME. Checked here as well so
+        // the button is visibly unavailable rather than refusing on press
+        // (`docs/01_PRD.md` section 4.1, `docs/04_UI_UX.md` section 6).
+        activeName.map { it != null }.distinctUntilChanged(),
+    ) { session, chosen, state, note, named -> pttState(session, chosen, state, note, named) }
         .distinctUntilChanged()
         .stateIn(
             viewModelScope,
@@ -209,6 +228,7 @@ class HomeViewModel(private val useCases: HomeUseCases) : ViewModel() {
         target: TargetState,
         connection: ConnectionState,
         message: PttMessage?,
+        named: Boolean,
     ): PttState = when (session) {
         is SessionState.Requesting ->
             PttState(PttPhase.REQUESTING, session.peerName, null)
@@ -220,7 +240,7 @@ class HomeViewModel(private val useCases: HomeUseCases) : ViewModel() {
             PttState(PttPhase.RECEIVING, session.peerName, null)
 
         SessionState.Idle -> {
-            val ready = connection == ConnectionState.READY && target.isChosen
+            val ready = named && connection == ConnectionState.READY && target.isChosen
             PttState(
                 phase = if (ready) PttPhase.READY else PttPhase.UNAVAILABLE,
                 peerName = target.userName,

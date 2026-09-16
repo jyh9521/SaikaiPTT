@@ -31,6 +31,47 @@
     <string name="home_selected">選択中</string>
     <string name="home_target">対話相手：%1$s</string>
     <string name="home_target_none">相手を選んでください</string>
+    <string name="home_change_user">変更</string>
+
+    <!-- Names: the first-run screen and the management screen (Task33). -->
+    <string name="welcome_title">ようこそ</string>
+    <string name="welcome_description">使用する名前を作成してください。この名前は通信相手の画面に表示されます。</string>
+    <string name="welcome_create">作成</string>
+
+    <string name="user_screen_title">名前の管理</string>
+    <string name="user_name_label">名前</string>
+    <!-- Live counter under the field: typed characters out of the limit. -->
+    <string name="user_name_counter">%1$d / %2$d</string>
+    <string name="user_name_too_long">%1$d 文字以内で入力してください。</string>
+    <!--
+        Within the character limit but over the 64-byte wire limit. Reachable
+        with ordinary names in Burmese or Bengali, so it is its own message
+        rather than a repeat of the character one.
+    -->
+    <string name="user_name_too_long_in_bytes">この名前は長すぎます。短くしてください。</string>
+    <string name="user_in_use">使用中</string>
+    <string name="user_add">名前を追加</string>
+    <string name="user_edit">編集</string>
+    <string name="user_edit_title">名前を編集</string>
+    <string name="user_delete">削除</string>
+    <string name="user_delete_title">名前を削除しますか？</string>
+    <string name="user_delete_body">「%1$s」を削除します。この操作は取り消せません。</string>
+    <string name="user_delete_confirm">削除</string>
+    <string name="user_discard_title">変更を破棄しますか？</string>
+    <string name="user_discard_body">保存していない変更があります。</string>
+    <string name="user_discard_confirm">破棄</string>
+
+    <string name="user_message_in_call">通話終了後に切り替えられます。</string>
+    <string name="user_message_cannot_delete_last">最後の名前は削除できません。</string>
+    <string name="user_message_cannot_delete_active">使用中の名前は削除できません。先に切り替えてください。</string>
+    <string name="user_message_not_found">その名前は見つかりませんでした。</string>
+    <string name="user_message_name_blank">名前を入力してください。</string>
+    <string name="user_message_name_rejected">この名前は使用できません。</string>
+
+    <!-- Actions shared by more than one screen. -->
+    <string name="action_back">戻る</string>
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_save">保存</string>
 
     <!--
         Peer state. Shown as text beside the status shape, never as colour
@@ -62,15 +103,12 @@
     <string name="ptt_message_interrupted">通話が中断されました。</string>
 
     <!--
-        Debug-only controls on the Home screen. The name editor is replaced by
-        Task33 and the language buttons and the service switch by Task35; until
-        then they are the only way to set a name or change the language, and an
-        app with no way to set a name cannot be used at all. Never shipped:
-        guarded by BuildConfig.DEBUG, and docs/08_ReleaseChecklist.md section 43
-        forbids test UI in a release.
+        Debug-only controls on the Home screen. The language buttons and the
+        service switch are replaced by Task35's settings screen; until then they
+        are the only way to change either. Never shipped: guarded by
+        BuildConfig.DEBUG, and docs/08_ReleaseChecklist.md section 43 forbids
+        test UI in a release.
     -->
-    <string name="debug_name_label">名前</string>
-    <string name="debug_name_set">設定</string>
     <string name="debug_language_label">表示言語</string>
     <string name="debug_service_stop">サービス停止</string>
 
