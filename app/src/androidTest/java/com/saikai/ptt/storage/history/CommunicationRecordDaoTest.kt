@@ -3,11 +3,16 @@ package com.saikai.ptt.storage.history
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.saikai.ptt.core.config.LoggingConfig
 import com.saikai.ptt.core.domain.AudioFormat
 import com.saikai.ptt.core.domain.CommunicationRecord
 import com.saikai.ptt.core.domain.Direction
 import com.saikai.ptt.core.domain.RecordStatus
 import com.saikai.ptt.core.domain.TranscriptStatus
+import com.saikai.ptt.core.logger.LogCategory
+import com.saikai.ptt.core.logger.LogLevel
+import com.saikai.ptt.core.logger.LogSink
+import com.saikai.ptt.core.logger.Logger
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -39,6 +44,19 @@ class CommunicationRecordDaoTest {
 
     private lateinit var database: SaikaiDatabase
     private lateinit var dao: CommunicationRecordDao
+
+    /** Nothing is asserted about the log here, so it goes nowhere. */
+    private val logger = Logger(
+        LoggingConfig.debug(),
+        object : LogSink {
+            override fun write(
+                level: LogLevel,
+                category: LogCategory,
+                message: String,
+                throwable: Throwable?,
+            ) = Unit
+        },
+    )
 
     private val local = "11111111-1111-4111-8111-111111111111"
     private val remote = "22222222-2222-4222-8222-222222222222"
@@ -280,5 +298,228 @@ class CommunicationRecordDaoTest {
                 assertTrue(cursor.moveToFirst())
                 assertEquals(Direction.RECEIVE.name, cursor.getString(0))
             }
+    }
+
+    // --- search (Task40, docs/05_DataModel.md section 27.1) ---------------------------
+
+    /** Wraps a term the way [RoomHistoryRepository] does, so the tests exercise the real one. */
+    private suspend fun search(term: String): List<CommunicationRecordEntity> {
+        val repository = RoomHistoryRepository(dao, logger)
+        return repository.observeMatching(term).first().map { it.toEntity() }
+    }
+
+    @Test
+    fun searchMatchesTheRemoteUserName() = runBlocking {
+        dao.save(record(userName = "山田").toEntity())
+        dao.save(record(userName = "田中").toEntity())
+
+        assertEquals(listOf("山田"), search("山田").map { it.remoteUserName })
+    }
+
+    @Test
+    fun searchMatchesPartOfAName() = runBlocking {
+        dao.save(record(userName = "山田太郎").toEntity())
+
+        assertEquals(1, search("田太").size)
+    }
+
+    @Test
+    fun searchMatchesTheTranscript() = runBlocking {
+        dao.save(
+            record(userName = "山田")
+                .copy(
+                    transcript = "おはようございます",
+                    transcriptStatus = TranscriptStatus.COMPLETED,
+                )
+                .toEntity()
+        )
+        dao.save(record(userName = "田中").toEntity())
+
+        assertEquals(listOf("山田"), search("はよう").map { it.remoteUserName })
+    }
+
+    @Test
+    fun searchWorksInEveryShippedScript() = runBlocking {
+        // The five languages of section 15. Nothing is tokenised, which is the
+        // reason LIKE was chosen over FTS -- so the only way this can break is
+        // if something along the way mangles the encoding.
+        val names = listOf("山田", "倉庫", "Warehouse", "ကျေးဇူး", "গুদাম")
+        names.forEach { dao.save(record(userName = it, sessionId = it).toEntity()) }
+
+        names.forEach { name ->
+            assertEquals("searching for $name", 1, search(name).size)
+        }
+    }
+
+    @Test
+    fun aBlankSearchIsTheWholeHistory() = runBlocking {
+        dao.save(record(userName = "山田").toEntity())
+        dao.save(record(userName = "田中").toEntity())
+
+        assertEquals(2, search("").size)
+        assertEquals(2, search("   ").size)
+    }
+
+    @Test
+    fun anUnderscoreInATermIsALiteralUnderscore() = runBlocking {
+        // Unescaped, LIKE would read this as "any single character" and the
+        // second row would match too.
+        dao.save(record(userName = "a_b", sessionId = "u1").toEntity())
+        dao.save(record(userName = "axb", sessionId = "u2").toEntity())
+
+        assertEquals(listOf("a_b"), search("a_b").map { it.remoteUserName })
+    }
+
+    @Test
+    fun aPercentInATermIsALiteralPercent() = runBlocking {
+        dao.save(record(userName = "100%", sessionId = "p1").toEntity())
+        dao.save(record(userName = "満充電", sessionId = "p2").toEntity())
+
+        assertEquals(listOf("100%"), search("100%").map { it.remoteUserName })
+    }
+
+    @Test
+    fun aBackslashInATermIsALiteralBackslash() = runBlocking {
+        // The escape character itself. If it were not escaped first, escaping
+        // the other two would consume it.
+        dao.save(record(userName = """a\b""", sessionId = "b1").toEntity())
+        dao.save(record(userName = "ab", sessionId = "b2").toEntity())
+
+        assertEquals(1, search("""\""").size)
+    }
+
+    @Test
+    fun searchResultsAreNewestFirst() = runBlocking {
+        dao.save(record(userName = "山田", timestamp = 1_000, sessionId = "s1").toEntity())
+        dao.save(record(userName = "山田", timestamp = 3_000, sessionId = "s2").toEntity())
+        dao.save(record(userName = "山田", timestamp = 2_000, sessionId = "s3").toEntity())
+
+        assertEquals(listOf(3_000L, 2_000L, 1_000L), search("山田").map { it.timestamp })
+    }
+
+    @Test
+    fun aSearchThatMatchesNothingIsEmptyRatherThanEverything() = runBlocking {
+        dao.save(record(userName = "山田").toEntity())
+
+        assertTrue(search("存在しない名前").isEmpty())
+    }
+
+    // --- cleanup queries (Task40) -----------------------------------------------------
+
+    @Test
+    fun expiredReturnsOnlyRecordsOlderThanTheCutoff() = runBlocking {
+        dao.save(record(timestamp = 1_000, sessionId = "old").toEntity())
+        dao.save(record(timestamp = 5_000, sessionId = "new").toEntity())
+
+        val expired = dao.expiredBefore(beforeMillis = 3_000, limit = 100)
+
+        assertEquals(listOf(1_000L), expired.map { it.timestamp })
+    }
+
+    @Test
+    fun expiredNeverReturnsAFavourite() = runBlocking {
+        // docs/05_DataModel.md section 25. The rule lives in the query so no
+        // caller can skip it, which is exactly why it is tested at this level.
+        dao.save(record(timestamp = 1_000, sessionId = "kept").toEntity().copy(isFavorite = true))
+        dao.save(record(timestamp = 1_000, sessionId = "ordinary").toEntity())
+
+        val expired = dao.expiredBefore(beforeMillis = 3_000, limit = 100)
+
+        assertEquals(listOf("ordinary"), expired.map { it.sessionId })
+    }
+
+    @Test
+    fun expiredComesBackOldestFirst() = runBlocking {
+        // Oldest first so a batched sweep makes progress from the far end.
+        dao.save(record(timestamp = 3_000, sessionId = "c").toEntity())
+        dao.save(record(timestamp = 1_000, sessionId = "a").toEntity())
+        dao.save(record(timestamp = 2_000, sessionId = "b").toEntity())
+
+        assertEquals(
+            listOf("a", "b", "c"),
+            dao.expiredBefore(beforeMillis = 9_000, limit = 100).map { it.sessionId },
+        )
+    }
+
+    @Test
+    fun expiredRespectsItsLimit() = runBlocking {
+        repeat(5) { dao.save(record(timestamp = it + 1L, sessionId = "s$it").toEntity()) }
+
+        assertEquals(2, dao.expiredBefore(beforeMillis = 9_000, limit = 2).size)
+    }
+
+    @Test
+    fun favouritesCanBeListedForTheDeleteEverythingPath() = runBlocking {
+        dao.save(record(sessionId = "kept").toEntity().copy(isFavorite = true))
+        dao.save(record(sessionId = "ordinary").toEntity())
+
+        assertEquals(listOf("kept"), dao.favorites(limit = 100).map { it.sessionId })
+    }
+
+    @Test
+    fun audioPathsReturnsOnlyTheRowsThatHaveOne() = runBlocking {
+        dao.save(
+            record(sessionId = "with", audioPath = "records/2026/09/16/a.opus", audioFormat = AudioFormat.OPUS)
+                .toEntity()
+        )
+        dao.save(record(sessionId = "without").toEntity())
+
+        assertEquals(listOf("records/2026/09/16/a.opus"), dao.audioPaths())
+    }
+
+    @Test
+    fun countsSeparateFavouritesFromTheTotal() = runBlocking {
+        dao.save(record(sessionId = "a").toEntity().copy(isFavorite = true))
+        dao.save(record(sessionId = "b").toEntity())
+        dao.save(record(sessionId = "c").toEntity())
+
+        assertEquals(3, dao.count())
+        assertEquals(1, dao.favoriteCount())
+    }
+
+    // --- bulk delete (Task40) ---------------------------------------------------------
+
+    @Test
+    fun deletingASetRemovesExactlyThoseRows() = runBlocking {
+        val ids = (1..5).map { index ->
+            record(sessionId = "s$index").also { dao.save(it.toEntity()) }.id
+        }
+
+        assertEquals(3, dao.deleteByIds(ids.take(3)))
+        assertEquals(2, dao.count())
+    }
+
+    @Test
+    fun deletingIdsThatAreNotThereIsNotAnError() = runBlocking {
+        val present = record(sessionId = "present").also { dao.save(it.toEntity()) }
+
+        assertEquals(1, dao.deleteByIds(listOf(present.id, "ghost-1", "ghost-2")))
+        assertEquals(0, dao.count())
+    }
+
+    @Test
+    fun deletingAnEmptySetIsHarmless() = runBlocking {
+        dao.save(record(sessionId = "present").toEntity())
+
+        assertEquals(0, dao.deleteByIds(emptyList()))
+        assertEquals(1, dao.count())
+    }
+
+    @Test
+    fun deletingAWholeHistoryExceedsOneStatementsParameterLimit() = runBlocking {
+        // SQLITE_MAX_VARIABLE_NUMBER is 999 on the SQLite versions this app's
+        // minimum ships with, and "delete my whole history" is exactly the call
+        // that would hit it. The repository chunks; this proves the chunking is
+        // needed and that it works.
+        val repository = RoomHistoryRepository(dao, logger)
+        val ids = (1..1_200).map { index ->
+            record(sessionId = "s$index", timestamp = index.toLong())
+                .also { dao.save(it.toEntity()) }.id
+        }
+
+        val outcome = repository.deleteAll(ids)
+
+        assertTrue(outcome is com.saikai.ptt.core.common.Outcome.Success)
+        assertEquals(0, dao.count())
     }
 }
