@@ -62,12 +62,23 @@ arm64-v8a 约 31.9 MB，armeabi-v7a 约 22.3 MB。
 断言「上游不提供 int8 单独的下载」，那句话对 sherpa-onnx 的发布页成立，对 HF 不成立，
 是在无法访问 HF 的情况下把推断写成了结论。已更正。
 
-**仍然重新打包成一个归档挂到本项目的 GitHub Releases 上**，理由与「能不能单独下」无关：
+**仍然把四个文件挂到本项目自己的 GitHub Releases 上**，但**不打包成归档**。
 
-- `ADR-006 §2` 要求「记录预期大小与摘要，校验失败则删除并要求重新下载」。
-  一个归档 = 一个摘要、一次下载、一条进度、一次原子安装；四个文件就是四份校验、
-  四条失败路径、以及「下到第三个断网」这种半装状态要处理。
-- URL 由我们控制，不受第三方的可用性、限速或重新发布影响。
+重新托管的理由与「能不能单独下」无关：URL 由我们控制，不受第三方的可用性、
+限速或重新发布影响，而 `ADR-006 §2` 要求的「记录预期大小与摘要」只有在我们控制的
+URL 上才钉得住。
+
+**不打包**，则是因为打包的三条理由都站不住：
+
+- **Java 没有内置的 bzip2 解码器。** `java.util.zip` 只有 deflate 与 gzip。
+  用 `.tar.bz2` 要为它引一个 commons-compress 之类的依赖，而 `§32` 要求
+  引依赖前先确认平台有没有现成的——这里的答案是「有，但不是 bz2」。
+- **改用 zip 只是把问题换个样子**：设备上要同时容纳归档与解压后的内容，
+  峰值多占 161 MB，而低端机本来就紧张。
+- **「一个归档 = 一个摘要」并没有省事。** 四个文件的 SHA-256 已有独立来源（见下），
+  原子性靠「下到临时目录 → 逐个校验 → 整个目录改名」实现，与归档无关。
+
+`.onnx` 本身已是压过的权重，压缩率也无可省。
 
 这不只是省流量，还解决了 `ADR-006 §2` 要求而上游满足不了的一件事——
 「记录预期大小与摘要，校验失败则删除并要求重新下载」。URL 由我们控制，
@@ -102,8 +113,9 @@ sherpa-onnx 的 Android AAR 不在 Maven Central。两条路：
 
 Apache-2.0 要求随分发保留许可与声明。在 Release 资产旁与应用内各放一份：
 
-- 重新打包的归档里附 `LICENSE` 与 `NOTICE`，写明模型来自 reazon-research，
-  经 sherpa-onnx 导出量化，二者均为 Apache-2.0
+- Release 里与模型文件并列发布 `LICENSE` 与 `NOTICE` 两个资产，写明模型来自
+  reazon-research、经 sherpa-onnx 导出量化，二者均为 Apache-2.0。
+  `NOTICE` 的正文在仓库里（`tools/asr-model/NOTICE`），不靠临时敲
 - 应用内设置页增加「开源许可」项，列出 libopus、sherpa-onnx、reazonspeech
 
 ### 同一性与安全审查
@@ -154,6 +166,37 @@ print(sorted({n.op_type for n in m.graph.node}))
 ```
 
 域不是只有 `''`，或者出现了上表以外的算子，就停下来。
+
+### 模型的发布位置
+
+已发布，tag `asr-model-ja-v1`。应用端的 URL 按下面这个前缀拼，**tag 名字不可更改**：
+
+```
+https://github.com/jyh9521/SaikaiPTT/releases/download/asr-model-ja-v1/<文件名>
+```
+
+| 资产 | 字节 | SHA-256 |
+|---|---|---|
+| `encoder-epoch-99-avg-1.int8.onnx` | 154,670,139 | `2c7bd08a8a99f9ddd0d9e458456577b1f6279214e51426f114f9eced44c54e1d` |
+| `decoder-epoch-99-avg-1.int8.onnx` | 2,959,337 | `8f0bff94d38797b03b762634ed03211a8e303d06cc4603cdd0cf4199d6eb1485` |
+| `joiner-epoch-99-avg-1.int8.onnx` | 2,696,970 | `49cc7ea1d3d35a40a27442db5e89996da64bf0e683a903dce76e99e57a12e4de` |
+| `tokens.txt` | 45,754 | `2c3ac659818a48a0c04010e0593bbc4d7c8a24a054340b01131499c05fd52def` |
+| `LICENSE` | 11,358 | `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
+| `NOTICE` | 1,300 | `75268472ca0dbc981922ea2ba8c71ee9b6bf130b47430e11677439ef0d9c4e0f` |
+
+`LICENSE` 与 `NOTICE` 是许可要求的随附声明，**应用不下载它们**——只有前四个进设备。
+
+前四个的摘要有三个互相独立的来源，全部一致：
+
+1. 从 sherpa-onnx 官方 tar 包取出后实测
+2. GitHub 在 release 页上自己算出并展示的
+3. 从上面那个 URL 下回来后实测
+
+第 3 条同时验证了 URL 本身可用：`tokens.txt` 下回来逐字节相符，
+encoder 的 `Content-Length` 为 154,670,139，与预期一致。
+
+Task46 把这张表钉进 `SaikaiConfig`。**不要在代码里重新抄一遍摘要**——
+以本表为准，改了这里就要改那里。
 
 ## Consequences
 

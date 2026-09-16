@@ -1,0 +1,112 @@
+docs: reinstate offline Japanese ASR; ADR-011's size argument was wrong (ADR-012)
+
+ADR-011 concluded that v1 ships without speech recognition for two
+reasons. The first stands: Vosk's published Android .so is built with
+NDK 25 and no max-page-size flag, and that cannot be worked around from
+the project side. The second was wrong, and wrong in a specific way worth
+naming.
+
+That argument used 713,097,333 bytes as the cost of the Japanese model.
+That is the size of the .tar.bz2. Listing the archive shows what is in it:
+the int8 encoder is 154,670,139 bytes, the int8 decoder 2,959,337, the
+int8 joiner 2,696,970, tokens.txt 45,754 -- about 153 MiB in total. The
+other 82% is fp32 weights that a phone never loads, plus sample audio. So
+the real cost is three times ADR-006's "roughly 50 MB", not fourteen.
+Three is arguable; fourteen was not.
+
+The irony is on the record: ADR-011 and the performance manual both spend
+paragraphs warning that a number taken the wrong way is worse than no
+number because it looks like a conclusion, and then ADR-011 did exactly
+that. ADR-012 says so where the next person will read it.
+
+What made the decision possible was checking the two things that were
+still assumptions.
+
+sherpa-onnx's GitHub Releases carry only the whole archive -- there is no
+-int8 asset (404) and the documented command is to fetch and untar the
+lot. But the model's source repository on HuggingFace serves the four
+files individually, and they are byte-identical to what is inside the
+archive. An earlier draft of ADR-012 asserted that upstream offers no
+int8-only download; that was true of the sherpa-onnx release page and
+false of HuggingFace, and it was written as a conclusion from a sandbox
+that cannot reach HuggingFace at all. It is corrected in place, named as
+the second inference-stated-as-fact in this thread.
+
+Rehosting stands anyway, for a reason unrelated to whether the files can
+be fetched separately: ADR-006 section 2 requires an expected size and
+digest with deletion on mismatch, and a URL we control is the only place
+to pin one that upstream will not change underneath it.
+
+The archive does not stand. An earlier draft had the four files packed
+into a .tar.bz2 on the grounds that one archive is one digest and one
+atomic install. Java has no built-in bzip2 decoder -- java.util.zip is
+deflate and gzip -- so that would have meant a compression dependency for
+a feature that section 32 says to check the platform for first. Switching
+to zip only moves the problem: the device would have to hold the archive
+and its contents at once, 161 MB of peak space it does not have to spare.
+And the atomicity argument was never about the archive: download to a
+temporary directory, verify each file, rename the directory into place
+gets it either way, and the four digests already exist from an independent
+source. So the release carries six plain assets, which is one less step
+for whoever publishes it and one less piece of extraction code in the app.
+
+tools/package-asr-model.md is the procedure, written for the Windows
+cmd.exe this project is actually developed in rather than the bash an
+earlier draft assumed, using the curl and certutil that ship with Windows.
+The NOTICE text lives in the repository at tools/asr-model/NOTICE so it
+does not have to be retyped into a terminal.
+
+HuggingFace flags both encoder files as "scanned as suspicious", one of
+them the file this project would be shipping to users' phones. That was
+worth settling before writing any code, so the file was extracted from the
+sherpa-onnx archive and taken apart. Its opset has one domain, the
+standard one; all 10,634 nodes are in it; there are no custom operators,
+no external-data references that could pull in a second file, and no local
+functions. The weights are 688 int8 tensors plus their scales, and the
+signature is a zipformer encoder's. A byte scan for 23 markers -- pickle
+opcodes and method names, subprocess, os.system, builtins, torch.jit, the
+custom-op domains, URLs, shell paths -- returns nothing in 155 MB. It is a
+ClamAV false positive on a large binary, which is what HuggingFace's own
+pickle scanner says too. ADR-012 records the findings, the reasoning and
+the command to re-check, so the next person does not repeat the
+investigation. It also records the four per-file SHA-256 values, taken
+from the sherpa-onnx archive, so a HuggingFace download can be verified
+against an independent source.
+
+The model's own licence is Apache-2.0 -- confirmed on the model page,
+which this sandbox cannot reach. sherpa-onnx's code is Apache-2.0 too,
+verified from its repository. Redistribution is therefore allowed with
+attribution, so the repackaged archive carries a LICENSE and a NOTICE
+naming Reazon Holdings and the k2-fsa project, and the settings screen
+will gain an open-source licences entry.
+
+reazonspeech rather than whisper-tiny: the 54 MB saved does not buy back
+the accuracy. reazonspeech is trained on 35,000 hours of Japanese;
+whisper-tiny does Japanese as one of many languages, and its decoder
+quantises badly enough that the int8 build is still 85.7 MB, so the small
+model is not actually much smaller.
+
+One thing is still unknown and cannot be known before integrating: whether
+a 147 MB int8 encoder runs usefully on a 4 GB MTK P22. That is point four
+of ADR-006's review checklist, open since the beginning, and it is now the
+question the feature lives or dies on. ADR-012 sets the thresholds before
+the measurement rather than after -- recognition time at most 1.0x the
+audio duration, unusable beyond 2x, and any effect on PTT during
+recognition is a blocker -- and notes that the feature being off by default
+is what makes "integrate, then measure, then possibly withdraw" a safe
+sequence rather than a gamble.
+
+Task45 and Task46 define the work: the engine binding, an OggOpusReader to
+get PCM back out of what Task38 wrote, and the recognition queue in one;
+model delivery, the UI and the measurement in the other. Both are outside
+the original Task01~44 plan and say so.
+
+Task46 also carries a correction that must not be missed. ADR-011 made v1
+"does not touch the Internet, not once", and the README, the CHANGELOG,
+the manifest comment and CLAUDE.md section 18 were all written to match.
+That stops being true, and the four places are listed by name.
+
+No code in this commit. The data model needs no migration: transcript, the
+five-state transcriptStatus and its index have been there since Task37,
+which is the payoff for ADR-011 insisting they stay when the feature was
+dropped.

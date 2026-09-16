@@ -1,0 +1,33 @@
+SaikaiPTT Japanese ASR model files
+==================================
+
+These four files are redistributed unmodified from the ONNX export of the
+ReazonSpeech k2 v2 Japanese speech recognition model: the int8 quantised
+encoder, decoder and joiner, and the token table. The fp32 weights
+published alongside them are omitted because a phone never loads them.
+Nothing that is included has been altered in any way.
+
+  encoder-epoch-99-avg-1.int8.onnx   154,670,139 bytes
+  decoder-epoch-99-avg-1.int8.onnx     2,959,337 bytes
+  joiner-epoch-99-avg-1.int8.onnx      2,696,970 bytes
+  tokens.txt                              45,754 bytes
+
+Model
+  ReazonSpeech k2 v2
+  https://huggingface.co/reazon-research/reazonspeech-k2-v2
+  Copyright Reazon Holdings, Inc.
+  Licensed under the Apache License, Version 2.0
+
+ONNX export and int8 quantisation
+  sherpa-onnx, by the k2-fsa project
+  https://github.com/k2-fsa/sherpa-onnx
+  Licensed under the Apache License, Version 2.0
+
+A copy of the Apache License, Version 2.0 is published as the LICENSE
+asset in the same release.
+
+Redistributed by the SaikaiPTT project
+  https://github.com/jyh9521/SaikaiPTT
+  See docs/ADR/ADR-012-ASR-Reinstated.md for why these files are hosted
+  here rather than fetched from upstream, and for the security review of
+  the encoder.
