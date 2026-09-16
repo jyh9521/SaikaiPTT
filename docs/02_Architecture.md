@@ -245,7 +245,7 @@ app  ──────────────► core
  ├─ discovery ─► app.network, core.protocol, core.domain, core.config, core.common
  ├─ presence  ─► app.network, core.protocol, core.domain, core.config, core.common
  ├─ audio     ─► core.config, core.common
- ├─ storage   ─► core.domain, core.common
+ ├─ storage   ─► core.domain, core.common, core.logger
  ├─ asr       ─► core.domain, app.storage
  └─ di        ─► 以上全部（唯一允许知晓所有实现的地方）
 

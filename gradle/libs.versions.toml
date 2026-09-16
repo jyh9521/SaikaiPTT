@@ -55,6 +55,33 @@ activityCompose = "1.13.0"
 # way activity 1.13.0 was against its own 1.14.0-alpha.
 lifecycle = "2.11.0"
 
+# Annotation processing, for Room only. The version is Kotlin's own with KSP's
+# appended, and the two halves are not independent: KSP publishes one release
+# per Kotlin release and a mismatched pair fails at configuration time.
+#
+# 2.2.10-2.0.2 is the release built for Kotlin 2.2.10 -- read from the tags of
+# github.com/google/ksp itself, not recalled (CLAUDE.md 34.2). The next tags in
+# that repo are 2.2.20-*, so this is the last one for our Kotlin.
+ksp = "2.2.10-2.0.2"
+
+# Communication history (docs/05_DataModel.md section 10). DataStore stays for
+# settings; a database is for structured records only (CLAUDE.md section 22).
+#
+# UNVERIFIED -- the one version in this file that is not ground truth. Neither
+# the Gradle cache nor the IDE's own catalogue on the developer's machine has
+# ever resolved Room, and Google Maven is not reachable from where this was
+# written. Two further facts, both read from androidx-main:
+#
+#   - Room has moved to the group "androidx.room3", developing 3.1.0-alpha01.
+#   - The old "androidx.room" group keeps its final 2.x releases on Maven.
+#
+# The 2.x line is used deliberately: its package names and API are known exactly
+# here, while room3's are not, and a wrong guess about a package name is a
+# rewrite rather than a version bump. 2.7.0 is the oldest release that supports
+# KSP2, which the KSP version above is. Confirm the exact patch on first build
+# and raise it; lint's GradleDependency check will report it once one runs.
+room = "2.7.0"
+
 # Storage / concurrency
 # Versions taken from the Gradle cache, which is the only source of truth
 # available here (CLAUDE.md 34.2). Lint's GradleDependency check reports newer
@@ -88,6 +115,13 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+# Coroutines and Flow support for DAOs. Part of Room, versioned with it.
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+# Migration tests read the exported schema JSON; Task40 uses it.
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 
@@ -110,3 +144,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 # :core is a plain JVM module, so it needs the Kotlin JVM plugin explicitly.
 # The :app module does not: AGP 9 has built-in Kotlin support.
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

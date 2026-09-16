@@ -3,6 +3,8 @@ package com.saikai.ptt
 import android.app.Application
 import com.saikai.ptt.di.AppContainer
 import com.saikai.ptt.permissions.PermissionInspector
+import com.saikai.ptt.storage.history.RoomHistoryRepository
+import com.saikai.ptt.storage.history.SaikaiDatabase
 import com.saikai.ptt.storage.DataStoreSettingsRepository
 
 /**
@@ -27,6 +29,11 @@ class SaikaiApplication : Application() {
             // The application context, not an Activity's: permission state
             // outlives every screen, and holding an Activity here would leak it.
             permissionInspectorFactory = { PermissionInspector(this) },
+            // Room defers opening the file until the first query, so building
+            // this costs nothing at start-up.
+            historyRepositoryFactory = { logger ->
+                RoomHistoryRepository(SaikaiDatabase.open(this).records(), logger)
+            },
         )
     }
 

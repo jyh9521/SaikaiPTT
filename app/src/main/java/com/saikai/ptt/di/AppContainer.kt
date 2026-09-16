@@ -2,6 +2,7 @@ package com.saikai.ptt.di
 
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.DeviceIdentityProvider
+import com.saikai.ptt.core.domain.HistoryRepository
 import com.saikai.ptt.core.domain.LocalUserRepository
 import com.saikai.ptt.core.domain.SettingsLocalUserRepository
 import com.saikai.ptt.core.domain.SettingsRepository
@@ -74,6 +75,11 @@ class AppContainer(
      * also why [permissionUseCases] is the only thing that touches it.
      */
     private val permissionInspectorFactory: (() -> PermissionInspector)? = null,
+    /**
+     * Opens the communication history. Null in a plain JVM test, where there is
+     * no SQLite to open and nothing that reads history is under test.
+     */
+    private val historyRepositoryFactory: ((Logger) -> HistoryRepository)? = null,
 ) {
 
     /**
@@ -116,6 +122,23 @@ class AppContainer(
      */
     val localUsers: LocalUserRepository by lazy {
         SettingsLocalUserRepository(settingsRepository)
+    }
+
+    /**
+     * Stored conversations.
+     *
+     * Application scope, not service scope, and lazy. The history outlives any
+     * one session and is read by screens with no service running at all; it is
+     * opened on the first query rather than at start-up, so a process created
+     * only for a broadcast receiver never touches the disk for it.
+     *
+     * Absent in a JVM test rather than faked: nothing the container itself does
+     * reads history, so a test that needs one supplies it.
+     */
+    val history: HistoryRepository by lazy {
+        val factory = historyRepositoryFactory
+            ?: error("This container was built without a HistoryRepository")
+        factory(logger)
     }
 
     /**

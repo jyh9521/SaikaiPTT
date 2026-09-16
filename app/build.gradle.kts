@@ -1,6 +1,21 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    // Room's annotation processor. Only :app has annotations to process.
+    alias(libs.plugins.ksp)
+}
+
+/**
+ * Where Room writes the schema of every database version.
+ *
+ * Committed to the repository, which is the point: it is the record of what
+ * version 1 actually was, and without it a migration written later has nothing
+ * to migrate from. docs/05_DataModel.md requires the export, and the database
+ * deliberately has no destructive fallback, so a missing migration is a crash
+ * in development rather than a silent wipe in the field.
+ */
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 android {
@@ -154,6 +169,13 @@ dependencies {
     // Room (docs/05_DataModel.md section 2).
     implementation(libs.androidx.datastore.preferences)
 
+    // Communication history. room-ktx is what makes a DAO return a Flow and a
+    // suspend function; without it every query would be blocking and would have
+    // to be wrapped by hand at each call site.
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
     // Main-thread dispatcher. coroutines-core arrives transitively through :core.
     implementation(libs.kotlinx.coroutines.android)
 
@@ -173,6 +195,10 @@ dependencies {
     // Test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    // The DAO and its indices are only real on a device: Room's generated code
+    // needs SQLite, and an in-memory database is still the platform's.
+    androidTestImplementation(libs.androidx.room.testing)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
