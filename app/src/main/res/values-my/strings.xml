@@ -129,4 +129,33 @@
     <string name="notification_service_text">အလုပ်လုပ်နေသည်</string>
     <string name="notification_service_receiving">လက်ခံနေသည်- %1$s</string>
     <string name="language_system">စနစ်အတိုင်း</string>
+
+    <!-- Communication history and recording playback (Task39). -->
+    <string name="history_title">မှတ်တမ်း</string>
+    <string name="history_detail_title">ခေါ်ဆိုမှု အသေးစိတ်</string>
+    <string name="history_empty">မှတ်တမ်း မရှိသေးပါ။</string>
+    <string name="history_direction_send">ပို့သည်</string>
+    <string name="history_direction_receive">လက်ခံသည်</string>
+    <string name="history_unread">မဖတ်ရသေး</string>
+    <string name="history_favorite_mark">အကြိုက်ဆုံး</string>
+    <string name="history_favorite">အကြိုက်ဆုံးထဲ ထည့်မည်</string>
+    <string name="history_unfavorite">အကြိုက်ဆုံးမှ ဖယ်မည်</string>
+    <string name="history_no_audio">အသံဖမ်းချက် မရှိပါ</string>
+    <string name="history_not_recorded">ဤခေါ်ဆိုမှုအတွက် အသံဖမ်းချက် မသိမ်းဆည်းခဲ့ပါ။</string>
+    <string name="history_file_missing">အသံဖိုင်ကို ရှာမတွေ့ပါ။</string>
+    <string name="history_unplayable">ဤအသံဖမ်းချက်ကို ဖွင့်၍ မရပါ။</string>
+    <string name="history_missing_record">ဤမှတ်တမ်းကို ရှာမတွေ့ပါ။</string>
+    <string name="history_play">ဖွင့်မည်</string>
+    <string name="history_pause">ခဏရပ်မည်</string>
+    <string name="history_resume">ဆက်ဖွင့်မည်</string>
+    <string name="history_stop">ရပ်မည်</string>
+    <string name="history_status_interrupted">ခေါ်ဆိုမှု ပြတ်တောက်သွားသည်</string>
+    <string name="history_status_failed">အသံဖမ်းခြင်း မအောင်မြင်ပါ</string>
+    <string name="history_transcript">စာတန်းထိုး</string>
+    <string name="history_transcript_pending">အသိအမှတ်ပြုရန် စောင့်နေသည်</string>
+    <string name="history_transcript_processing">အသိအမှတ်ပြုနေသည်</string>
+    <string name="history_transcript_failed">အသံမှ စာသို့ ပြောင်းခြင်း မအောင်မြင်ပါ</string>
+    <string name="history_transcript_retry_later">ပြန်လည်အသိအမှတ်ပြုခြင်းကို နောက်ဗားရှင်းတွင် ထည့်သွင်းပါမည်။</string>
+    <string name="home_history_unread">မှတ်တမ်း (%1$d)</string>
+
 </resources>

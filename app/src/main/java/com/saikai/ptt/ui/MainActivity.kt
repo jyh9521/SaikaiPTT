@@ -37,6 +37,9 @@ import com.saikai.ptt.di.AppContainer
 import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.permissions.AppPermission
 import com.saikai.ptt.permissions.PermissionNavigator
+import com.saikai.ptt.ui.history.HistoryDetailScreen
+import com.saikai.ptt.ui.history.HistoryListScreen
+import com.saikai.ptt.ui.history.HistoryViewModel
 import com.saikai.ptt.ui.home.HomeScreen
 import com.saikai.ptt.ui.home.HomeViewModel
 import com.saikai.ptt.ui.permissions.OnboardingScreen
@@ -50,6 +53,7 @@ import com.saikai.ptt.ui.user.NameGate
 import com.saikai.ptt.ui.user.UserManagementScreen
 import com.saikai.ptt.ui.user.UsersViewModel
 import com.saikai.ptt.ui.user.WelcomeScreen
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The application's single Activity: it decides which screen is on show.
@@ -118,6 +122,13 @@ class MainActivity : ComponentActivity() {
                         isDebugBuild = BuildConfig.DEBUG,
                     )
                 )
+                val history: HistoryViewModel = viewModel(
+                    factory = HistoryViewModel.Factory(
+                        useCases = container.historyUseCases,
+                        playback = container.recordingPlayback,
+                        observeSession = container.homeUseCases.observeSession,
+                    )
+                )
                 val openPermission = rememberPermissionOpener(container, permissions)
 
                 LaunchedEffect(resumeCount) { permissions.refresh() }
@@ -131,7 +142,16 @@ class MainActivity : ComponentActivity() {
                 var stack by rememberSaveable { mutableStateOf(listOf(Destination.HOME)) }
                 val destination = stack.last()
                 val open: (Destination) -> Unit = { next -> stack = stack + next }
-                val goBack: () -> Unit = { if (stack.size > 1) stack = stack.dropLast(1) }
+                val goBack: () -> Unit = {
+                    if (stack.size > 1) {
+                        // Leaving the detail releases the player, whether the
+                        // user used the screen's own button or the system one.
+                        // Here rather than in the screen's `onBack` because the
+                        // system button does not go through the screen at all.
+                        if (destination == Destination.HISTORY_DETAIL) history.close()
+                        stack = stack.dropLast(1)
+                    }
+                }
 
                 // Declared before the screens, so a screen with something open
                 // of its own -- an editor, a confirmation -- registers later and
@@ -188,6 +208,31 @@ class MainActivity : ComponentActivity() {
                             modifier = padded,
                         )
 
+                        destination == Destination.HISTORY -> HistoryListScreen(
+                            rows = history.rows,
+                            onOpen = { id ->
+                                history.open(id)
+                                open(Destination.HISTORY_DETAIL)
+                            },
+                            onBack = goBack,
+                            modifier = padded,
+                        )
+
+                        destination == Destination.HISTORY_DETAIL -> HistoryDetailScreen(
+                            detail = history.detail,
+                            playback = history.playbackState,
+                            unavailable = history::unavailable,
+                            onPlay = history::play,
+                            onPause = history::pause,
+                            onStop = history::stopPlayback,
+                            onToggleFavorite = history::toggleFavorite,
+                            // `goBack` releases the player; the list behind is
+                            // still live, so the record it just marked read
+                            // redraws on its own.
+                            onBack = goBack,
+                            modifier = padded,
+                        )
+
                         destination == Destination.LANGUAGE -> LanguageScreen(
                             current = settings.language,
                             onSelect = { chosen ->
@@ -215,9 +260,11 @@ class MainActivity : ComponentActivity() {
                             Home(
                                 container = container,
                                 permissions = permissions,
+                                unreadCount = history.unreadCount,
                                 onOpenUsers = { open(Destination.USERS) },
                                 onOpenPermissions = { open(Destination.PERMISSIONS) },
                                 onOpenSettings = { open(Destination.SETTINGS) },
+                                onOpenHistory = { open(Destination.HISTORY) },
                                 modifier = padded,
                             )
                         }
@@ -238,9 +285,11 @@ class MainActivity : ComponentActivity() {
     private fun Home(
         container: AppContainer,
         permissions: PermissionsViewModel,
+        unreadCount: StateFlow<Int>,
         onOpenUsers: () -> Unit,
         onOpenPermissions: () -> Unit,
         onOpenSettings: () -> Unit,
+        onOpenHistory: () -> Unit,
         modifier: Modifier,
     ) {
         val home: HomeViewModel = viewModel(
@@ -254,10 +303,12 @@ class MainActivity : ComponentActivity() {
             target = home.target,
             ptt = home.ptt,
             permissionWarning = permissions.anyDenied,
+            unreadCount = unreadCount,
             onSelectPeer = home::select,
             onOpenUsers = onOpenUsers,
             onOpenPermissions = onOpenPermissions,
             onOpenSettings = onOpenSettings,
+            onOpenHistory = onOpenHistory,
             onPressTalk = talk.onPress,
             onReleaseTalk = talk.onRelease,
             onSetServiceRunning = { running ->
@@ -347,7 +398,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Which screen is open, once the first run is done. */
-private enum class Destination { HOME, USERS, PERMISSIONS, SETTINGS, LANGUAGE }
+private enum class Destination { HOME, USERS, PERMISSIONS, SETTINGS, LANGUAGE, HISTORY, HISTORY_DETAIL }
 
 /** Shown for the one frame or two before storage answers. */
 @Composable

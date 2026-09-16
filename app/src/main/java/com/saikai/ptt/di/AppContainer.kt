@@ -2,6 +2,7 @@ package com.saikai.ptt.di
 
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.DeviceIdentityProvider
+import com.saikai.ptt.core.common.subsystemScope
 import com.saikai.ptt.core.domain.HistoryRepository
 import com.saikai.ptt.core.domain.LocalUserRepository
 import com.saikai.ptt.core.domain.SettingsLocalUserRepository
@@ -11,6 +12,7 @@ import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.locale.LocaleController
 import com.saikai.ptt.AppVisibility
+import com.saikai.ptt.audio.RecordingPlayback
 import com.saikai.ptt.permissions.PermissionInspector
 import com.saikai.ptt.logging.AndroidLogSink
 import com.saikai.ptt.service.PttGateway
@@ -31,6 +33,12 @@ import com.saikai.ptt.usecase.ObserveLocalUsers
 import com.saikai.ptt.usecase.RenameLocalUser
 import com.saikai.ptt.usecase.SwitchActiveUser
 import com.saikai.ptt.usecase.UserUseCases
+import com.saikai.ptt.usecase.HistoryUseCases
+import com.saikai.ptt.usecase.MarkRecordRead
+import com.saikai.ptt.usecase.ObserveHistory
+import com.saikai.ptt.usecase.ObserveUnreadCount
+import com.saikai.ptt.usecase.ReadRecord
+import com.saikai.ptt.usecase.SetRecordFavorite
 import com.saikai.ptt.usecase.CompleteFirstLaunch
 import com.saikai.ptt.usecase.CompleteGuidance
 import com.saikai.ptt.usecase.ObserveFirstRun
@@ -44,6 +52,7 @@ import com.saikai.ptt.usecase.ReadDiagnostics
 import com.saikai.ptt.usecase.SetAllowInterrupt
 import com.saikai.ptt.usecase.SetLanguage
 import com.saikai.ptt.usecase.SettingsUseCases
+import kotlinx.coroutines.Dispatchers
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -81,6 +90,8 @@ class AppContainer(
      * no SQLite to open and nothing that reads history is under test.
      */
     private val historyRepositoryFactory: ((Logger) -> HistoryRepository)? = null,
+    /** The app's private files directory. Null in a plain JVM test. */
+    private val filesDirFactory: (() -> java.io.File)? = null,
 ) {
 
     /**
@@ -235,6 +246,46 @@ class AppContainer(
             observeFirstRun = ObserveFirstRun(settingsRepository),
             completeGuidance = CompleteGuidance(settingsRepository),
             completeFirstLaunch = CompleteFirstLaunch(settingsRepository),
+        )
+    }
+
+    /** Reading stored conversations. Writing them is the service's job. */
+    val historyUseCases: HistoryUseCases by lazy {
+        HistoryUseCases(
+            observeHistory = ObserveHistory(history),
+            observeUnreadCount = ObserveUnreadCount(history),
+            readRecord = ReadRecord(history),
+            markRead = MarkRecordRead(history),
+            setFavorite = SetRecordFavorite(history),
+        )
+    }
+
+    /**
+     * Plays one recording at a time.
+     *
+     * Application scope because a `MediaPlayer` is a real resource and one is
+     * enough: one screen shows one recording, and a second player would be a
+     * second thing holding the speaker. Its scope is its own rather than a
+     * screen's, so the progress ticker cannot outlive a failure in something
+     * unrelated.
+     *
+     * The scope is the **main** dispatcher, unlike every other subsystem here.
+     * A `MediaPlayer` is not thread-safe, and the only two things that touch
+     * this one are the buttons (main thread) and the progress ticker; putting
+     * the ticker anywhere else would let it call `isPlaying` on a player that
+     * `stop()` released a microsecond earlier. Reading a position five times a
+     * second costs the main thread nothing.
+     *
+     * @param filesDirFactory supplied by the caller, because the private
+     *   directory needs a Context and this container deliberately has none.
+     */
+    val recordingPlayback: RecordingPlayback by lazy {
+        val factory = filesDirFactory
+            ?: error("This container was built without a files directory")
+        RecordingPlayback(
+            filesDir = factory(),
+            logger = logger,
+            scope = subsystemScope("playback", logger, Dispatchers.Main.immediate),
         )
     }
 

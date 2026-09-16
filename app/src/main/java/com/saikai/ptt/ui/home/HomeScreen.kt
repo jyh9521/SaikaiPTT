@@ -89,10 +89,12 @@ fun HomeScreen(
     target: StateFlow<TargetState>,
     ptt: StateFlow<PttState>,
     permissionWarning: StateFlow<Boolean>,
+    unreadCount: StateFlow<Int>,
     onSelectPeer: (DeviceId) -> Unit,
     onOpenUsers: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     onPressTalk: () -> Unit,
     onReleaseTalk: () -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
@@ -102,7 +104,14 @@ fun HomeScreen(
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        HeaderSection(header, onOpenUsers, onOpenSettings, onSetServiceRunning)
+        HeaderSection(
+            header = header,
+            unreadCount = unreadCount,
+            onOpenUsers = onOpenUsers,
+            onOpenSettings = onOpenSettings,
+            onOpenHistory = onOpenHistory,
+            onSetServiceRunning = onSetServiceRunning,
+        )
         PermissionNotice(permissionWarning, onOpenPermissions)
 
         Text(
@@ -135,11 +144,14 @@ fun HomeScreen(
 @Composable
 private fun HeaderSection(
     header: StateFlow<HomeHeader>,
+    unreadCount: StateFlow<Int>,
     onOpenUsers: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
 ) {
     val state by header.collectAsState()
+    val unread by unreadCount.collectAsState()
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // The app's name on the left and the way into settings on the right,
@@ -153,6 +165,19 @@ private fun HeaderSection(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
+            // History first, settings last: the one the user reaches for
+            // daily sits nearer the middle of the screen. The unread count is
+            // part of the label rather than a coloured dot -- section 28 again,
+            // nothing may be carried by colour alone.
+            TextButton(onClick = onOpenHistory) {
+                Text(
+                    text = if (unread > 0) {
+                        stringResource(R.string.home_history_unread, unread)
+                    } else {
+                        stringResource(R.string.history_title)
+                    }
+                )
+            }
             TextButton(onClick = onOpenSettings) {
                 Text(stringResource(R.string.settings_title))
             }
@@ -638,10 +663,12 @@ private fun HomeScreenPreview() {
             target = MutableStateFlow(TargetState(rows[0].deviceId, "山田")),
             ptt = MutableStateFlow(PttState(PttPhase.READY, "山田", null)),
             permissionWarning = MutableStateFlow(false),
+            unreadCount = MutableStateFlow(2),
             onSelectPeer = {},
             onOpenUsers = {},
             onOpenPermissions = {},
             onOpenSettings = {},
+            onOpenHistory = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},
@@ -659,10 +686,12 @@ private fun HomeScreenOfflinePreview() {
             target = MutableStateFlow(TargetState(null, null)),
             ptt = MutableStateFlow(PttState(PttPhase.UNAVAILABLE, null, PttMessage.TARGET_BUSY)),
             permissionWarning = MutableStateFlow(false),
+            unreadCount = MutableStateFlow(0),
             onSelectPeer = {},
             onOpenUsers = {},
             onOpenPermissions = {},
             onOpenSettings = {},
+            onOpenHistory = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},

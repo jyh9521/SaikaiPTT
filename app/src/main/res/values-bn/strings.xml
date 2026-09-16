@@ -128,4 +128,33 @@
     <string name="notification_service_text">চলছে</string>
     <string name="notification_service_receiving">গ্রহণ করা হচ্ছে: %1$s</string>
     <string name="language_system">সিস্টেম অনুযায়ী</string>
+
+    <!-- Communication history and recording playback (Task39). -->
+    <string name="history_title">ইতিহাস</string>
+    <string name="history_detail_title">কলের বিবরণ</string>
+    <string name="history_empty">এখনও কোনো ইতিহাস নেই।</string>
+    <string name="history_direction_send">পাঠানো</string>
+    <string name="history_direction_receive">গৃহীত</string>
+    <string name="history_unread">অপঠিত</string>
+    <string name="history_favorite_mark">প্রিয়</string>
+    <string name="history_favorite">প্রিয়তে যোগ করুন</string>
+    <string name="history_unfavorite">প্রিয় থেকে সরান</string>
+    <string name="history_no_audio">কোনো রেকর্ডিং নেই</string>
+    <string name="history_not_recorded">এই কলের রেকর্ডিং সংরক্ষণ করা হয়নি।</string>
+    <string name="history_file_missing">রেকর্ডিং ফাইলটি পাওয়া যায়নি।</string>
+    <string name="history_unplayable">এই রেকর্ডিংটি চালানো যাচ্ছে না।</string>
+    <string name="history_missing_record">এই রেকর্ডটি পাওয়া যায়নি।</string>
+    <string name="history_play">চালান</string>
+    <string name="history_pause">থামান</string>
+    <string name="history_resume">আবার চালান</string>
+    <string name="history_stop">বন্ধ করুন</string>
+    <string name="history_status_interrupted">কলটি বাধাপ্রাপ্ত হয়েছিল</string>
+    <string name="history_status_failed">রেকর্ডিং ব্যর্থ হয়েছে</string>
+    <string name="history_transcript">সাবটাইটেল</string>
+    <string name="history_transcript_pending">শনাক্তকরণের অপেক্ষায়</string>
+    <string name="history_transcript_processing">শনাক্ত করা হচ্ছে</string>
+    <string name="history_transcript_failed">বক্তৃতা শনাক্তকরণ ব্যর্থ হয়েছে</string>
+    <string name="history_transcript_retry_later">পুনরায় শনাক্তকরণ পরবর্তী সংস্করণে যুক্ত হবে।</string>
+    <string name="home_history_unread">ইতিহাস (%1$d)</string>
+
 </resources>

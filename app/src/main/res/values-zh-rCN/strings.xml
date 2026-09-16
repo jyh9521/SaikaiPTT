@@ -125,4 +125,33 @@
     <string name="notification_service_text">正在运行</string>
     <string name="notification_service_receiving">正在接收：%1$s</string>
     <string name="language_system">跟随系统</string>
+
+    <!-- Communication history and recording playback (Task39). -->
+    <string name="history_title">历史记录</string>
+    <string name="history_detail_title">通话详情</string>
+    <string name="history_empty">暂无历史记录。</string>
+    <string name="history_direction_send">发送</string>
+    <string name="history_direction_receive">接收</string>
+    <string name="history_unread">未读</string>
+    <string name="history_favorite_mark">收藏</string>
+    <string name="history_favorite">加入收藏</string>
+    <string name="history_unfavorite">取消收藏</string>
+    <string name="history_no_audio">无录音</string>
+    <string name="history_not_recorded">此次通话没有保存录音。</string>
+    <string name="history_file_missing">找不到录音文件。</string>
+    <string name="history_unplayable">无法播放该录音。</string>
+    <string name="history_missing_record">找不到该记录。</string>
+    <string name="history_play">播放</string>
+    <string name="history_pause">暂停</string>
+    <string name="history_resume">继续</string>
+    <string name="history_stop">停止</string>
+    <string name="history_status_interrupted">通话被中断</string>
+    <string name="history_status_failed">录音失败</string>
+    <string name="history_transcript">字幕</string>
+    <string name="history_transcript_pending">等待识别</string>
+    <string name="history_transcript_processing">正在识别</string>
+    <string name="history_transcript_failed">语音识别失败</string>
+    <string name="history_transcript_retry_later">重新识别将在后续版本中提供。</string>
+    <string name="home_history_unread">历史记录（%1$d）</string>
+
 </resources>

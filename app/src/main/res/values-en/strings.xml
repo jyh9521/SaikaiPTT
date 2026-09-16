@@ -141,4 +141,33 @@
     <string name="notification_service_title">SaikaiPTT</string>
     <string name="notification_service_text">Running</string>
     <string name="notification_service_receiving">Receiving: %1$s</string>
+
+    <!-- Communication history and recording playback (Task39). -->
+    <string name="history_title">History</string>
+    <string name="history_detail_title">Call details</string>
+    <string name="history_empty">No history yet.</string>
+    <string name="history_direction_send">Sent</string>
+    <string name="history_direction_receive">Received</string>
+    <string name="history_unread">Unread</string>
+    <string name="history_favorite_mark">Favourite</string>
+    <string name="history_favorite">Add to favourites</string>
+    <string name="history_unfavorite">Remove from favourites</string>
+    <string name="history_no_audio">No recording</string>
+    <string name="history_not_recorded">This call was not recorded.</string>
+    <string name="history_file_missing">The recording file is missing.</string>
+    <string name="history_unplayable">This recording cannot be played.</string>
+    <string name="history_missing_record">This record could not be found.</string>
+    <string name="history_play">Play</string>
+    <string name="history_pause">Pause</string>
+    <string name="history_resume">Resume</string>
+    <string name="history_stop">Stop</string>
+    <string name="history_status_interrupted">The call was interrupted</string>
+    <string name="history_status_failed">Recording failed</string>
+    <string name="history_transcript">Subtitles</string>
+    <string name="history_transcript_pending">Waiting for recognition</string>
+    <string name="history_transcript_processing">Recognising</string>
+    <string name="history_transcript_failed">Speech recognition failed</string>
+    <string name="history_transcript_retry_later">Re-running recognition will come in a later version.</string>
+    <string name="home_history_unread">History (%1$d)</string>
+
 </resources>

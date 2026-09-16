@@ -34,6 +34,7 @@ class SaikaiApplication : Application() {
             historyRepositoryFactory = { logger ->
                 RoomHistoryRepository(SaikaiDatabase.open(this).records(), logger)
             },
+            filesDirFactory = { filesDir },
         )
     }
 

@@ -185,6 +185,35 @@
     <!-- Shown while a transmission is playing and nothing else is showing it. -->
     <string name="notification_service_receiving">受信中：%1$s</string>
 
+
+    <!-- Communication history and recording playback (Task39, docs/04_UI_UX.md sections 26-29). -->
+    <string name="history_title">履歴</string>
+    <string name="history_detail_title">通話の詳細</string>
+    <string name="history_empty">履歴はまだありません。</string>
+    <string name="history_direction_send">送信</string>
+    <string name="history_direction_receive">受信</string>
+    <string name="history_unread">未読</string>
+    <string name="history_favorite_mark">お気に入り</string>
+    <string name="history_favorite">お気に入りに追加</string>
+    <string name="history_unfavorite">お気に入りを解除</string>
+    <string name="history_no_audio">録音はありません</string>
+    <string name="history_not_recorded">この通話の録音は保存されていません。</string>
+    <string name="history_file_missing">録音ファイルが見つかりません。</string>
+    <string name="history_unplayable">この録音を再生できません。</string>
+    <string name="history_missing_record">この記録は見つかりません。</string>
+    <string name="history_play">再生</string>
+    <string name="history_pause">一時停止</string>
+    <string name="history_resume">再開</string>
+    <string name="history_stop">停止</string>
+    <string name="history_status_interrupted">通話は中断されました</string>
+    <string name="history_status_failed">録音に失敗しました</string>
+    <string name="history_transcript">字幕</string>
+    <string name="history_transcript_pending">認識待ちです</string>
+    <string name="history_transcript_processing">認識中です</string>
+    <string name="history_transcript_failed">音声認識に失敗しました</string>
+    <string name="history_transcript_retry_later">再認識は今後のバージョンで対応します。</string>
+    <string name="home_history_unread">履歴（%1$d）</string>
+
     <!-- Endonyms: a language is always offered in its own script. -->
     <string name="language_system">システムに従う</string>
     <string name="language_chinese" translatable="false">简体中文</string>
