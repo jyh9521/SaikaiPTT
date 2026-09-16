@@ -134,6 +134,8 @@
     <string name="settings_group_background">バックグラウンド</string>
     <string name="settings_service">通信サービス</string>
     <string name="settings_service_description">オフにすると、送受信と端末の検出がすべて停止します。</string>
+    <string name="settings_overlay">オーバーレイ表示</string>
+    <string name="settings_overlay_description">アプリを閉じている間、画面の上に小さな表示を出します。受信中は赤くなり、相手の名前が出ます。システムの「他のアプリの上に表示」の許可が必要です。</string>
     <string name="settings_permissions_value">マイク・通知・オーバーレイ・バッテリー・自動起動</string>
     <string name="settings_group_language">言語</string>
     <string name="settings_language">表示言語</string>

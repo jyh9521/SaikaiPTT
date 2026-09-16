@@ -36,6 +36,8 @@ import com.saikai.ptt.usecase.PermissionUseCases
 import com.saikai.ptt.usecase.ReadPermissions
 import com.saikai.ptt.usecase.ObserveAllowInterrupt
 import com.saikai.ptt.usecase.ObserveLanguage
+import com.saikai.ptt.usecase.ObserveOverlayEnabled
+import com.saikai.ptt.usecase.SetOverlayEnabled
 import com.saikai.ptt.usecase.ReadDiagnostics
 import com.saikai.ptt.usecase.SetAllowInterrupt
 import com.saikai.ptt.usecase.SetLanguage
@@ -226,6 +228,8 @@ class AppContainer(
             observeAllowInterrupt = ObserveAllowInterrupt(settingsRepository),
             setLanguage = SetLanguage(locales),
             setAllowInterrupt = SetAllowInterrupt(settingsRepository),
+            observeOverlayEnabled = ObserveOverlayEnabled(settingsRepository),
+            setOverlayEnabled = SetOverlayEnabled(settingsRepository),
             observeServiceState = ObserveServiceState(serviceStatus),
             setServiceRunning = SetServiceRunning(),
             readDiagnostics = ReadDiagnostics(deviceIdentity, config, serviceStatus),

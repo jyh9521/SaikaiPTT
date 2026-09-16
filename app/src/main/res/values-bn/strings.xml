@@ -91,6 +91,8 @@
     <string name="settings_group_background">ব্যাকগ্রাউন্ড</string>
     <string name="settings_service">যোগাযোগ পরিষেবা</string>
     <string name="settings_service_description">বন্ধ করলে পাঠানো, গ্রহণ করা এবং ডিভাইস খোঁজা সবই থেমে যাবে।</string>
+    <string name="settings_overlay">ভাসমান সূচক</string>
+    <string name="settings_overlay_description">অ্যাপটি বন্ধ থাকলে পর্দার উপরে একটি ছোট সূচক দেখায়। কেউ কথা বললে সেটি লাল হয়ে তার নাম দেখায়। সিস্টেমের “অন্য অ্যাপের উপরে দেখানো” অনুমতি দরকার।</string>
     <string name="settings_permissions_value">মাইক্রোফোন, বিজ্ঞপ্তি, ওভারলে, ব্যাটারি, স্বয়ংক্রিয় চালু</string>
     <string name="settings_group_language">ভাষা</string>
     <string name="settings_language">প্রদর্শনের ভাষা</string>

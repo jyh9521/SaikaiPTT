@@ -54,6 +54,10 @@ class SettingsViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val overlayEnabled: StateFlow<Boolean> = useCases.observeOverlayEnabled()
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val activeUserName: StateFlow<String?> = activeUser()
         .map { it?.displayName }
         .distinctUntilChanged()
@@ -79,6 +83,10 @@ class SettingsViewModel(
 
     fun setAllowInterrupt(allow: Boolean) {
         viewModelScope.launch { useCases.setAllowInterrupt(allow) }
+    }
+
+    fun setOverlayEnabled(enabled: Boolean) {
+        viewModelScope.launch { useCases.setOverlayEnabled(enabled) }
     }
 
     /**

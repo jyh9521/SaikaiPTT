@@ -92,6 +92,8 @@
     <string name="settings_group_background">နောက်ခံ</string>
     <string name="settings_service">ဆက်သွယ်ရေး ဝန်ဆောင်မှု</string>
     <string name="settings_service_description">ပိတ်လိုက်ပါက ပို့ခြင်း၊ လက်ခံခြင်းနှင့် စက်ရှာဖွေခြင်း အားလုံး ရပ်ပါမည်။</string>
+    <string name="settings_overlay">မျက်နှာပြင်ပေါ် အမှတ်အသား</string>
+    <string name="settings_overlay_description">အက်ပ်ကို ပိတ်ထားစဉ် မျက်နှာပြင်ပေါ်တွင် အမှတ်အသားငယ် တစ်ခု ပြပါမည်။ လက်ခံနေချိန်တွင် အနီရောင် ဖြစ်ပြီး ပြောသူ၏ နာမည် ပေါ်ပါမည်။ စနစ်၏ “အခြားအက်ပ်များအပေါ် ပြသခြင်း” ခွင့်ပြုချက် လိုအပ်သည်။</string>
     <string name="settings_permissions_value">မိုက်ခရိုဖုန်း၊ အကြောင်းကြားချက်၊ အပေါ်ထပ်ပြသခြင်း၊ ဘက်ထရီ၊ အလိုအလျောက်စတင်ခြင်း</string>
     <string name="settings_group_language">ဘာသာစကား</string>
     <string name="settings_language">ပြသမည့် ဘာသာစကား</string>

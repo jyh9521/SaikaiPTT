@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import com.saikai.ptt.SaikaiApplication
+import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.common.subsystemScope
 import com.saikai.ptt.core.logger.LogCategory
@@ -13,7 +14,6 @@ import com.saikai.ptt.di.ServiceContainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -74,6 +74,23 @@ class CommunicationService : Service() {
     private var peerMirror: Job? = null
     private var outcomeMirror: Job? = null
     private var recovery: NetworkRecovery? = null
+
+    /**
+     * Applies the chosen language to everything this service builds.
+     *
+     * Below Android 13 the locale is not a platform setting: it is applied by
+     * wrapping a component's base context, and until now only the Activity did
+     * it (`docs/04_UI_UX.md` section 35.1). Everything the *service* shows --
+     * the ongoing notification, and from Task36 the floating indicator -- was
+     * therefore resolved against the system language rather than the chosen
+     * one, on exactly the Android versions the reference device runs.
+     *
+     * A no-op on Android 13+, where the platform has already resolved it for
+     * every context in the process.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocale.wrap(newBase))
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 

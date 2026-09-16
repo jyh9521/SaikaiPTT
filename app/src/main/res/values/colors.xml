@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The product's operational colours, as Android resources.
+
+    These exist because the overlay is a platform View and cannot read the
+    Compose theme: app.overlay is forbidden to import com.saikai.ptt.ui
+    (ArchitectureRulesTest), and a View needs an int anyway.
+
+    The same values are also written as Compose Color constants in
+    app/src/main/java/com/saikai/ptt/ui/theme/Color.kt. Two copies of a colour
+    drift, and a drifted one here means the floating indicator is a different
+    green from the app it belongs to, so BrandColorsTest compares the two
+    files and fails the build when they disagree. Change both together.
+
+    docs/04_UI_UX.md section 3: green is normal, red is an incoming
+    transmission, amber is busy, grey is offline. Colour is never the only
+    carrier of a state; every screen says the same thing in words as well.
+-->
+<resources>
+    <color name="saikai_green">#FF2E7D32</color>
+    <color name="saikai_red">#FFC62828</color>
+    <color name="saikai_amber">#FFEF6C00</color>
+    <color name="saikai_grey">#FF757575</color>
+
+    <!-- Text drawn on top of the four above. -->
+    <color name="saikai_on_brand">#FFFFFFFF</color>
+</resources>

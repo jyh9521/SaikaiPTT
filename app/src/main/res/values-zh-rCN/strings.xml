@@ -88,6 +88,8 @@
     <string name="settings_group_background">后台</string>
     <string name="settings_service">通信服务</string>
     <string name="settings_service_description">关闭后将停止收发和设备发现。</string>
+    <string name="settings_overlay">悬浮窗</string>
+    <string name="settings_overlay_description">关闭应用时在屏幕上显示一个小标记。收到通信时变红并显示对方名称。需要系统的「显示在其他应用上层」权限。</string>
     <string name="settings_permissions_value">麦克风・通知・悬浮窗・电池・自启动</string>
     <string name="settings_group_language">语言</string>
     <string name="settings_language">显示语言</string>

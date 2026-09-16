@@ -53,6 +53,7 @@ fun SettingsScreen(
     language: StateFlow<AppLanguage>,
     allowInterrupt: StateFlow<Boolean>,
     serviceRunning: StateFlow<Boolean>,
+    overlayEnabled: StateFlow<Boolean>,
     diagnostics: StateFlow<Diagnostics?>,
     onBack: () -> Unit,
     onOpenUsers: () -> Unit,
@@ -60,6 +61,7 @@ fun SettingsScreen(
     onOpenPermissions: () -> Unit,
     onSetAllowInterrupt: (Boolean) -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
+    onSetOverlayEnabled: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -104,6 +106,14 @@ fun SettingsScreen(
                 description = R.string.settings_service_description,
                 checked = serviceRunning.collectAsState().value,
                 onCheckedChange = onSetServiceRunning,
+            )
+            SwitchRow(
+                title = R.string.settings_overlay,
+                // Says it needs the permission rather than silently doing
+                // nothing without it. The permission row is directly below.
+                description = R.string.settings_overlay_description,
+                checked = overlayEnabled.collectAsState().value,
+                onCheckedChange = onSetOverlayEnabled,
             )
             NavigationRow(
                 title = R.string.permission_screen_title,
@@ -274,6 +284,7 @@ private fun SettingsScreenPreview() {
             language = MutableStateFlow(AppLanguage.JAPANESE),
             allowInterrupt = MutableStateFlow(false),
             serviceRunning = MutableStateFlow(true),
+            overlayEnabled = MutableStateFlow(false),
             diagnostics = MutableStateFlow(null),
             onBack = {},
             onOpenUsers = {},
@@ -281,6 +292,7 @@ private fun SettingsScreenPreview() {
             onOpenPermissions = {},
             onSetAllowInterrupt = {},
             onSetServiceRunning = {},
+            onSetOverlayEnabled = {},
         )
     }
 }

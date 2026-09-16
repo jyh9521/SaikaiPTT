@@ -238,6 +238,7 @@ app  ──────────────► core
  ├─ usecase   ─► core.domain, core.session, app.service（ServiceStatus / PttGateway）,
  │                app.permissions
  ├─ permissions ─► 仅 Android SDK（不依赖本项目其它任何 package）
+ ├─ overlay   ─► core.common（LifecycleStep）, core.logger, app.locale
  ├─ service   ─► core.session, core.domain, app.network, app.discovery,
  │                app.presence, app.audio, app.overlay
  ├─ network   ─► core.protocol, core.config, core.common, core.logger

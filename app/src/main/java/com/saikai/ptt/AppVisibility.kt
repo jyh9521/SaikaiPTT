@@ -3,6 +3,9 @@ package com.saikai.ptt
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -29,6 +32,19 @@ class AppVisibility : Application.ActivityLifecycleCallbacks {
 
     private val started = AtomicInteger(0)
 
+    private val _foreground = MutableStateFlow(false)
+
+    /**
+     * The same answer, as something that can be watched.
+     *
+     * The talk button asks the question once, at the moment of a press, and
+     * [isForeground] is enough for that. The floating indicator has to *react*:
+     * it exists to say what is happening while no screen of this app is
+     * showing, so it has to be told when that stops being true (`docs/04_UI_UX.md`
+     * section 18).
+     */
+    val foreground: StateFlow<Boolean> = _foreground.asStateFlow()
+
     /** True while at least one Activity is between onStart and onStop. */
     val isForeground: Boolean get() = started.get() > 0
 
@@ -37,11 +53,11 @@ class AppVisibility : Application.ActivityLifecycleCallbacks {
     }
 
     override fun onActivityStarted(activity: Activity) {
-        started.incrementAndGet()
+        _foreground.value = started.incrementAndGet() > 0
     }
 
     override fun onActivityStopped(activity: Activity) {
-        started.updateAndGet { if (it > 0) it - 1 else 0 }
+        _foreground.value = started.updateAndGet { if (it > 0) it - 1 else 0 } > 0
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit

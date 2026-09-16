@@ -174,6 +174,7 @@ class MainActivity : ComponentActivity() {
                             language = settings.language,
                             allowInterrupt = settings.allowInterrupt,
                             serviceRunning = settings.serviceRunning,
+                            overlayEnabled = settings.overlayEnabled,
                             diagnostics = settings.diagnostics,
                             onBack = goBack,
                             onOpenUsers = { open(Destination.USERS) },
@@ -183,6 +184,7 @@ class MainActivity : ComponentActivity() {
                             onSetServiceRunning = { running ->
                                 settings.setServiceRunning(this@MainActivity, running)
                             },
+                            onSetOverlayEnabled = settings::setOverlayEnabled,
                             modifier = padded,
                         )
 

@@ -22,6 +22,8 @@ class SettingsUseCases(
     val observeAllowInterrupt: ObserveAllowInterrupt,
     val setLanguage: SetLanguage,
     val setAllowInterrupt: SetAllowInterrupt,
+    val observeOverlayEnabled: ObserveOverlayEnabled,
+    val setOverlayEnabled: SetOverlayEnabled,
     val observeServiceState: ObserveServiceState,
     val setServiceRunning: SetServiceRunning,
     val readDiagnostics: ReadDiagnostics,
@@ -47,6 +49,25 @@ class ObserveAllowInterrupt(private val settings: SettingsRepository) {
 class SetAllowInterrupt(private val settings: SettingsRepository) {
     suspend operator fun invoke(allow: Boolean) {
         settings.update { it.copy(allowInterrupt = allow) }
+    }
+}
+
+/**
+ * Whether the user wants the floating indicator.
+ *
+ * Separate from the system permission on purpose. Revoking SYSTEM_ALERT_WINDOW
+ * is a trip to system settings and affects nothing else the app might ever want
+ * a window for; this is the switch for "not right now", and the indicator
+ * requires both (`docs/04_UI_UX.md` section 20).
+ */
+class ObserveOverlayEnabled(private val settings: SettingsRepository) {
+    operator fun invoke(): Flow<Boolean> =
+        settings.settings.map { it.overlayEnabled }.distinctUntilChanged()
+}
+
+class SetOverlayEnabled(private val settings: SettingsRepository) {
+    suspend operator fun invoke(enabled: Boolean) {
+        settings.update { it.copy(overlayEnabled = enabled) }
     }
 }
 

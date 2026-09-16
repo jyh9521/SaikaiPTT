@@ -27,6 +27,7 @@ import com.saikai.ptt.network.InboundPacketRouter
 import com.saikai.ptt.network.NetworkMonitor
 import com.saikai.ptt.network.UdpDatagramSink
 import com.saikai.ptt.network.UdpTransport
+import com.saikai.ptt.overlay.OverlayIndicator
 import com.saikai.ptt.presence.UdpPresenceAnnouncer
 import com.saikai.ptt.service.ForegroundStep
 import com.saikai.ptt.service.MulticastLockStep
@@ -39,7 +40,9 @@ import com.saikai.ptt.session.VoiceSessionCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -236,6 +239,22 @@ class ServiceContainer(
         logger = app.logger,
     )
 
+    /**
+     * The floating indicator.
+     *
+     * Built here rather than in [AppContainer] because it owns a window, and a
+     * window is a resource: it has to stop existing when the service does. It
+     * is told what is happening by the session collector below and holds no
+     * communication state of its own.
+     */
+    private val overlay = OverlayIndicator(
+        service = service,
+        enabled = settings.map { it.overlayEnabled }.distinctUntilChanged(),
+        appForeground = app.visibility.foreground,
+        logger = app.logger,
+        scope = scope,
+    )
+
     private val coordinator = VoiceSessionCoordinator(
         sessions = sessions,
         router = router,
@@ -278,6 +297,7 @@ class ServiceContainer(
         transportStep,
         discovery,
         presence,
+        overlay,
         coordinator,
     )
 
@@ -311,23 +331,29 @@ class ServiceContainer(
             ?.let { ReceivingSession(it.sessionId, it.peer) }
 
     /**
-     * Tells the user a transmission is playing, when nothing else will.
+     * Tells the user a transmission is playing, in exactly one place.
      *
      * `docs/04_UI_UX.md` section 18.2 makes the ongoing notification the
-     * *fallback*: with the overlay on screen it is the overlay's job, and
-     * changing the notification as well would be two things saying the same
-     * thing. The overlay is Task36, so today there is nothing else and this
-     * always speaks; when Task36 lands, the condition goes here and nowhere
-     * else.
+     * *fallback*: when the floating indicator is on screen it is the
+     * indicator's job, and changing the notification as well would be two
+     * things saying the same thing a frame apart. When there is no indicator --
+     * permission refused, switched off, or the app is in front of it -- the
+     * notification speaks instead.
      *
-     * What section 18.2 does forbid outright is no visible feedback at all.
+     * What section 18.2 forbids outright is no visible feedback at all, and
+     * that is why the choice is made here from the indicator's *actual* state
+     * rather than from the setting: a window that failed to attach has to fall
+     * back, not go quiet.
+     *
+     * Both are told regardless; the indicator ignores what it cannot show.
      */
     private fun announceReceiving(
         service: Service,
         notifications: ServiceNotifications,
         peerName: String?,
     ) {
-        if (peerName == null) {
+        overlay.onReceivingChanged(peerName)
+        if (peerName == null || overlay.isShowing) {
             notifications.showResident(service)
         } else {
             notifications.showReceiving(service, peerName)
