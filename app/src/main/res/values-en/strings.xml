@@ -88,6 +88,26 @@
     <string name="home_permission_notice">Some permissions are not allowed</string>
     <string name="home_permission_action">Review</string>
 
+    <string name="settings_title">Settings</string>
+    <string name="settings_open">Open</string>
+    <string name="settings_group_user">User</string>
+    <string name="settings_active_user">Current name</string>
+    <string name="settings_group_call">Calls</string>
+    <string name="settings_allow_interrupt">Allow interruptions</string>
+    <string name="settings_allow_interrupt_description">Let other devices interrupt a call you are in. With this on, your call can be cut off while you are speaking.</string>
+    <string name="settings_group_background">Background</string>
+    <string name="settings_service">Communication service</string>
+    <string name="settings_service_description">Turning this off stops sending, receiving and device discovery.</string>
+    <string name="settings_permissions_value">Microphone, notifications, overlay, battery, auto-start</string>
+    <string name="settings_group_language">Language</string>
+    <string name="settings_language">Display language</string>
+    <string name="settings_language_selected">In use</string>
+    <string name="settings_group_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_known_limits_title">Known limits</string>
+    <string name="settings_known_limits">• Devices can only talk to each other on the same WiFi network. The internet is not used.\n• On enterprise access points with AP isolation or broadcast filtering, devices cannot find each other.\n• Talking requires the app to be on screen (an Android 14 restriction). Receiving works with the screen off.\n• One-to-one only: one conversation at a time.</string>
+    <string name="settings_group_developer">Developer</string>
+
     <string name="peer_state_online">Online</string>
     <string name="peer_state_busy">In a call</string>
     <string name="peer_state_communicating">In a call with this device</string>
@@ -110,8 +130,8 @@
     <string name="ptt_message_already_in_session">Already in a call.</string>
     <string name="ptt_message_interrupted">The call was interrupted.</string>
 
-    <string name="debug_language_label">Display language</string>
-    <string name="debug_service_stop">Stop service</string>
+
+    <string name="language_system">Follow the system</string>
 
     <string name="notification_channel_communication">Communication</string>
     <string name="notification_channel_communication_description">Shown so the app can keep receiving</string>

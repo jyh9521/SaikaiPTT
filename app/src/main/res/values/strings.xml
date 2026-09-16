@@ -118,6 +118,32 @@
     <string name="home_permission_notice">許可されていない権限があります</string>
     <string name="home_permission_action">確認</string>
 
+    <!-- Settings (Task35, docs/04_UI_UX.md section 34). -->
+    <string name="settings_title">設定</string>
+    <string name="settings_open">開く</string>
+    <string name="settings_group_user">ユーザー</string>
+    <string name="settings_active_user">現在のユーザー名</string>
+    <string name="settings_group_call">通話</string>
+    <string name="settings_allow_interrupt">割り込みを許可</string>
+    <!--
+        The wording is the safeguard. This switch is the RECEIVER's policy:
+        "others may interrupt me". Worded as the caller's ability, any single
+        device could cut into every call on the network (.claude/CLAUDE.md 7.1).
+    -->
+    <string name="settings_allow_interrupt_description">通話中の自分に、他の端末が割り込むことを許可します。オンにすると、話している途中でも通話が中断されることがあります。</string>
+    <string name="settings_group_background">バックグラウンド</string>
+    <string name="settings_service">通信サービス</string>
+    <string name="settings_service_description">オフにすると、送受信と端末の検出がすべて停止します。</string>
+    <string name="settings_permissions_value">マイク・通知・オーバーレイ・バッテリー・自動起動</string>
+    <string name="settings_group_language">言語</string>
+    <string name="settings_language">表示言語</string>
+    <string name="settings_language_selected">使用中</string>
+    <string name="settings_group_about">情報</string>
+    <string name="settings_version">バージョン</string>
+    <string name="settings_known_limits_title">既知の制限</string>
+    <string name="settings_known_limits">・同じ WiFi に接続している端末どうしでのみ通信できます。インターネットは使いません。\n・企業用アクセスポイントで AP 分離やブロードキャスト制限が有効な場合、端末を検出できません。\n・送信するには画面が表示されている必要があります（Android 14 以降の制限）。受信は画面が消えていても動作します。\n・同時に通話できるのは 1 対 1 です。</string>
+    <string name="settings_group_developer">開発者情報</string>
+
     <!--
         Peer state. Shown as text beside the status shape, never as colour
         alone (docs/04_UI_UX.md section 11.3). DISCOVERED is an internal
@@ -147,15 +173,6 @@
     <string name="ptt_message_already_in_session">すでに通話中です。</string>
     <string name="ptt_message_interrupted">通話が中断されました。</string>
 
-    <!--
-        Debug-only controls on the Home screen. The language buttons and the
-        service switch are replaced by Task35's settings screen; until then they
-        are the only way to change either. Never shipped: guarded by
-        BuildConfig.DEBUG, and docs/08_ReleaseChecklist.md section 43 forbids
-        test UI in a release.
-    -->
-    <string name="debug_language_label">表示言語</string>
-    <string name="debug_service_stop">サービス停止</string>
 
     <!-- Ongoing foreground-service notification (Task31, docs/04_UI_UX.md 18.2). -->
     <string name="notification_channel_communication">通信</string>
@@ -166,6 +183,10 @@
     <string name="notification_service_receiving">受信中：%1$s</string>
 
     <!-- Endonyms: a language is always offered in its own script. -->
+    <string name="language_system">システムに従う</string>
+    <string name="language_chinese" translatable="false">简体中文</string>
+    <string name="language_burmese" translatable="false">မြန်မာ</string>
+    <string name="language_bengali" translatable="false">বাংলা</string>
     <string name="language_japanese" translatable="false">日本語</string>
     <string name="language_english" translatable="false">English</string>
 </resources>

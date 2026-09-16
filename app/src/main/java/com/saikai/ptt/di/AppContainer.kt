@@ -34,6 +34,12 @@ import com.saikai.ptt.usecase.CompleteGuidance
 import com.saikai.ptt.usecase.ObserveFirstRun
 import com.saikai.ptt.usecase.PermissionUseCases
 import com.saikai.ptt.usecase.ReadPermissions
+import com.saikai.ptt.usecase.ObserveAllowInterrupt
+import com.saikai.ptt.usecase.ObserveLanguage
+import com.saikai.ptt.usecase.ReadDiagnostics
+import com.saikai.ptt.usecase.SetAllowInterrupt
+import com.saikai.ptt.usecase.SetLanguage
+import com.saikai.ptt.usecase.SettingsUseCases
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -211,5 +217,18 @@ class AppContainer(
      */
     val locales: LocaleController by lazy {
         LocaleController(settingsRepository, logger)
+    }
+
+    /** The settings screen and the language screen. */
+    val settingsUseCases: SettingsUseCases by lazy {
+        SettingsUseCases(
+            observeLanguage = ObserveLanguage(settingsRepository),
+            observeAllowInterrupt = ObserveAllowInterrupt(settingsRepository),
+            setLanguage = SetLanguage(locales),
+            setAllowInterrupt = SetAllowInterrupt(settingsRepository),
+            observeServiceState = ObserveServiceState(serviceStatus),
+            setServiceRunning = SetServiceRunning(),
+            readDiagnostics = ReadDiagnostics(deviceIdentity, config, serviceStatus),
+        )
     }
 }

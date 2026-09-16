@@ -2,15 +2,19 @@
 <!--
     Languages this build actually ships.
 
-    The product targets five (docs/01_PRD.md section 26), but only the two whose
-    resources exist are listed here. A locale named in this file is offered to
-    the user in system Settings on Android 13+, and picking one with no
-    translations shows Japanese while claiming to be Burmese. That is worse than
-    not offering it at all.
+    A locale named here is offered to the user in system Settings on Android
+    13+, so it may only be listed once its resources exist: picking one with no
+    translations shows Japanese while claiming to be Burmese, which is worse
+    than not offering it at all.
 
-    zh-CN, my and bn are added by Task35, together with their translations.
+    Task35 completed the remaining three. Burmese and Bengali still need a
+    native-speaker review and a font check on the low-end reference device
+    (docs/04_UI_UX.md section 35.3) before release.
 -->
 <locale-config xmlns:android="http://schemas.android.com/apk/res/android">
     <locale android:name="ja" />
+    <locale android:name="zh-CN" />
     <locale android:name="en" />
+    <locale android:name="my" />
+    <locale android:name="bn" />
 </locale-config>

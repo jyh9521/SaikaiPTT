@@ -7,16 +7,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,19 +23,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.saikai.ptt.BuildConfig
 import com.saikai.ptt.R
 import com.saikai.ptt.SaikaiApplication
-import com.saikai.ptt.core.domain.AppLanguage
 import com.saikai.ptt.di.AppContainer
 import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.permissions.AppPermission
@@ -47,12 +42,14 @@ import com.saikai.ptt.ui.home.HomeViewModel
 import com.saikai.ptt.ui.permissions.OnboardingScreen
 import com.saikai.ptt.ui.permissions.PermissionStatusScreen
 import com.saikai.ptt.ui.permissions.PermissionsViewModel
+import com.saikai.ptt.ui.settings.LanguageScreen
+import com.saikai.ptt.ui.settings.SettingsScreen
+import com.saikai.ptt.ui.settings.SettingsViewModel
 import com.saikai.ptt.ui.theme.SaikaiPttTheme
 import com.saikai.ptt.ui.user.NameGate
 import com.saikai.ptt.ui.user.UserManagementScreen
 import com.saikai.ptt.ui.user.UsersViewModel
 import com.saikai.ptt.ui.user.WelcomeScreen
-import kotlinx.coroutines.launch
 
 /**
  * The application's single Activity: it decides which screen is on show.
@@ -114,13 +111,32 @@ class MainActivity : ComponentActivity() {
                 val permissions: PermissionsViewModel = viewModel(
                     factory = PermissionsViewModel.Factory(container.permissionUseCases)
                 )
+                val settings: SettingsViewModel = viewModel(
+                    factory = SettingsViewModel.Factory(
+                        useCases = container.settingsUseCases,
+                        activeUser = container.userUseCases.observeActiveUser,
+                        isDebugBuild = BuildConfig.DEBUG,
+                    )
+                )
                 val openPermission = rememberPermissionOpener(container, permissions)
 
                 LaunchedEffect(resumeCount) { permissions.refresh() }
 
                 val gate by users.gate.collectAsState()
                 val guidanceShown by permissions.guidanceShown.collectAsState()
-                var destination by rememberSaveable { mutableStateOf(Destination.HOME) }
+                // A real stack now, one level deep in practice: Settings opens
+                // the name screen and the permission screen, and backing out of
+                // either has to land on Settings rather than on Home. See
+                // docs/ADR/ADR-010-Navigation-Back-Stack.md.
+                var stack by rememberSaveable { mutableStateOf(listOf(Destination.HOME)) }
+                val destination = stack.last()
+                val open: (Destination) -> Unit = { next -> stack = stack + next }
+                val goBack: () -> Unit = { if (stack.size > 1) stack = stack.dropLast(1) }
+
+                // Declared before the screens, so a screen with something open
+                // of its own -- an editor, a confirmation -- registers later and
+                // wins. Closing that comes before leaving the screen.
+                BackHandler(enabled = stack.size > 1) { goBack() }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     val padded = Modifier.padding(innerPadding)
@@ -144,14 +160,49 @@ class MainActivity : ComponentActivity() {
                             modifier = padded,
                         )
 
-                        destination == Destination.USERS -> Users(users, padded) {
-                            destination = Destination.HOME
-                        }
+                        destination == Destination.USERS -> Users(users, padded, goBack)
 
                         destination == Destination.PERMISSIONS -> PermissionStatusScreen(
                             rows = permissions.rows,
                             onOpen = openPermission,
-                            onBack = { destination = Destination.HOME },
+                            onBack = goBack,
+                            modifier = padded,
+                        )
+
+                        destination == Destination.SETTINGS -> SettingsScreen(
+                            activeUserName = settings.activeUserName,
+                            language = settings.language,
+                            allowInterrupt = settings.allowInterrupt,
+                            serviceRunning = settings.serviceRunning,
+                            diagnostics = settings.diagnostics,
+                            onBack = goBack,
+                            onOpenUsers = { open(Destination.USERS) },
+                            onOpenLanguage = { open(Destination.LANGUAGE) },
+                            onOpenPermissions = { open(Destination.PERMISSIONS) },
+                            onSetAllowInterrupt = settings::setAllowInterrupt,
+                            onSetServiceRunning = { running ->
+                                settings.setServiceRunning(this@MainActivity, running)
+                            },
+                            modifier = padded,
+                        )
+
+                        destination == Destination.LANGUAGE -> LanguageScreen(
+                            current = settings.language,
+                            onSelect = { chosen ->
+                                settings.setLanguage(this@MainActivity, chosen) {
+                                    // Below Android 13 the locale is applied by
+                                    // wrapping the base context, which only
+                                    // happens when the Activity attaches. Above
+                                    // it, the platform recreates the Activity
+                                    // itself (`docs/04_UI_UX.md` section 35.1).
+                                    if (Build.VERSION.SDK_INT <
+                                        Build.VERSION_CODES.TIRAMISU
+                                    ) {
+                                        recreate()
+                                    }
+                                }
+                            },
+                            onBack = goBack,
                             modifier = padded,
                         )
 
@@ -162,8 +213,9 @@ class MainActivity : ComponentActivity() {
                             Home(
                                 container = container,
                                 permissions = permissions,
-                                onOpenUsers = { destination = Destination.USERS },
-                                onOpenPermissions = { destination = Destination.PERMISSIONS },
+                                onOpenUsers = { open(Destination.USERS) },
+                                onOpenPermissions = { open(Destination.PERMISSIONS) },
+                                onOpenSettings = { open(Destination.SETTINGS) },
                                 modifier = padded,
                             )
                         }
@@ -186,6 +238,7 @@ class MainActivity : ComponentActivity() {
         permissions: PermissionsViewModel,
         onOpenUsers: () -> Unit,
         onOpenPermissions: () -> Unit,
+        onOpenSettings: () -> Unit,
         modifier: Modifier,
     ) {
         val home: HomeViewModel = viewModel(
@@ -202,30 +255,13 @@ class MainActivity : ComponentActivity() {
             onSelectPeer = home::select,
             onOpenUsers = onOpenUsers,
             onOpenPermissions = onOpenPermissions,
+            onOpenSettings = onOpenSettings,
             onPressTalk = talk.onPress,
             onReleaseTalk = talk.onRelease,
             onSetServiceRunning = { running ->
                 container.homeUseCases.setServiceRunning(this@MainActivity, running)
             },
             modifier = modifier,
-            debugExtras = {
-                if (BuildConfig.DEBUG) {
-                    DebugControls(
-                        language = AppLocale.cached(this@MainActivity),
-                        onStopService = {
-                            container.homeUseCases.setServiceRunning(this@MainActivity, false)
-                        },
-                        onSelectLanguage = { chosen ->
-                            container.locales.set(this@MainActivity, chosen)
-                            // Below Android 13 the locale is applied by wrapping
-                            // the base context, which only happens when the
-                            // Activity attaches. Above it, the platform
-                            // recreates the Activity itself.
-                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) recreate()
-                        },
-                    )
-                }
-            },
         )
     }
 
@@ -309,7 +345,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Which screen is open, once the first run is done. */
-private enum class Destination { HOME, USERS, PERMISSIONS }
+private enum class Destination { HOME, USERS, PERMISSIONS, SETTINGS, LANGUAGE }
 
 /** Shown for the one frame or two before storage answers. */
 @Composable
@@ -377,42 +413,5 @@ private fun rememberMicrophoneGate(
                 }
             },
         )
-    }
-}
-
-/**
- * Controls that only exist until the screen that owns them is built.
- *
- * Language and the service switch belong to Task35's settings screen, which is
- * also where the permission status screen's entry point moves.
- *
- * Guarded by `BuildConfig.DEBUG` at the call site;
- * `docs/08_ReleaseChecklist.md` section 43 forbids test UI in a release build.
- */
-@Composable
-private fun DebugControls(
-    language: AppLanguage,
-    onStopService: () -> Unit,
-    onSelectLanguage: suspend (AppLanguage) -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "${stringResource(R.string.debug_language_label)}: ${language.tag}",
-            style = MaterialTheme.typography.labelMedium,
-        )
-        OutlinedButton(onClick = { scope.launch { onSelectLanguage(AppLanguage.JAPANESE) } }) {
-            Text(stringResource(R.string.language_japanese))
-        }
-        OutlinedButton(onClick = { scope.launch { onSelectLanguage(AppLanguage.ENGLISH) } }) {
-            Text(stringResource(R.string.language_english))
-        }
-        OutlinedButton(onClick = onStopService) {
-            Text(stringResource(R.string.debug_service_stop))
-        }
     }
 }

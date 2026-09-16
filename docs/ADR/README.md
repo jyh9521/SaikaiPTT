@@ -21,5 +21,8 @@
 | ADR-007 | Opus 编解码库选型与集成 | Accepted | Task22, Task23, Task26 |
 | ADR-008 | 播放路由：改用 `USAGE_MEDIA` | Accepted | Task21, Task26 |
 | ADR-009 | 页面导航：手写状态，不引入 Navigation 库 | Accepted | Task33, Task35, Task36, Task37 |
+| ADR-010 | 导航加入返回栈（仍不引入 Navigation 库） | Accepted | Task35, Task36, Task37 |
 
 `ADR-008` 修订 `ADR-004 §3` 的两条（usage 与音量流），其余部分仍以 `ADR-004` 为准。
+
+`ADR-010` 修订 `ADR-009` 的「没有返回栈」一条，其余部分仍以 `ADR-009` 为准。

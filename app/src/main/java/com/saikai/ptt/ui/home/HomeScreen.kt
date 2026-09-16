@@ -92,19 +92,18 @@ fun HomeScreen(
     onSelectPeer: (DeviceId) -> Unit,
     onOpenUsers: () -> Unit,
     onOpenPermissions: () -> Unit,
+    onOpenSettings: () -> Unit,
     onPressTalk: () -> Unit,
     onReleaseTalk: () -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    debugExtras: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        HeaderSection(header, onOpenUsers, onSetServiceRunning)
+        HeaderSection(header, onOpenUsers, onOpenSettings, onSetServiceRunning)
         PermissionNotice(permissionWarning, onOpenPermissions)
-        debugExtras()
 
         Text(
             text = stringResource(R.string.home_peers_title),
@@ -137,15 +136,27 @@ fun HomeScreen(
 private fun HeaderSection(
     header: StateFlow<HomeHeader>,
     onOpenUsers: () -> Unit,
+    onOpenSettings: () -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
 ) {
     val state by header.collectAsState()
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        // The app's name on the left and the way into settings on the right,
+        // which is the header `docs/04_UI_UX.md` section 9 draws.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onOpenSettings) {
+                Text(stringResource(R.string.settings_title))
+            }
+        }
         // Tapping the name opens the name screen (`docs/04_UI_UX.md` section
         // 10). The trailing word is there because a line of text that happens
         // to be tappable is a line of text nobody taps.
@@ -629,6 +640,7 @@ private fun HomeScreenPreview() {
             onSelectPeer = {},
             onOpenUsers = {},
             onOpenPermissions = {},
+            onOpenSettings = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},
@@ -649,6 +661,7 @@ private fun HomeScreenOfflinePreview() {
             onSelectPeer = {},
             onOpenUsers = {},
             onOpenPermissions = {},
+            onOpenSettings = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},
