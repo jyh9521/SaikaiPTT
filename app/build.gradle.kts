@@ -1,3 +1,8 @@
+// At the top so `Properties` resolves to java.util.Properties. Inside a build
+// script `java` is Gradle's own project extension, so `java.util.Properties`
+// parses as `project.java`.`util` and does not compile.
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -16,6 +21,37 @@ plugins {
  */
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+/**
+ * Release signing, read from a file that is never committed.
+ *
+ * `keystore.properties` is in `.gitignore` along with `*.jks` and `*.keystore`
+ * (`.claude/CLAUDE.md` section 43.1 forbids committing either). See
+ * `keystore.properties.example` for the four keys.
+ *
+ * When the file is absent -- every developer machine that has not been set up
+ * to sign, and CI -- `assembleRelease` still succeeds and produces an
+ * **unsigned** APK. That is deliberate: a build that fails for want of a
+ * keystore stops people running Lint and the release-only shrinking rules,
+ * which are the two things a release build is most useful for before there is
+ * anything to publish. The build says so once at configuration time, so an
+ * unsigned APK is never a silent surprise.
+ */
+val keystoreProperties: Properties? =
+    rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file ->
+        // Written out rather than with `apply`: in a build script that name is
+        // Gradle's plugin-applying `apply`, which returns Unit.
+        val loaded = Properties()
+        file.inputStream().use { stream -> loaded.load(stream) }
+        loaded
+    }
+
+if (keystoreProperties == null) {
+    logger.lifecycle(
+        "SaikaiPTT: no keystore.properties -- release builds will be UNSIGNED. " +
+            "See keystore.properties.example."
+    )
 }
 
 android {
@@ -71,8 +107,30 @@ android {
         }
     }
 
+    signingConfigs {
+        // Declared only when the properties file is there. An empty
+        // signingConfig with null paths is worse than none: the build fails
+        // deep inside apksigner with a message about a missing file rather
+        // than at configuration time with a message about a missing setup.
+        keystoreProperties?.let { properties ->
+            create("release") {
+                storeFile = rootProject.file(properties.getProperty("storeFile"))
+                storePassword = properties.getProperty("storePassword")
+                keyAlias = properties.getProperty("keyAlias")
+                keyPassword = properties.getProperty("keyPassword")
+                // v1 is required by Android 11; v2 and v3 are what anything
+                // newer verifies with, and v3 is what allows a key rotation
+                // later without breaking updates.
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = keystoreProperties?.let { signingConfigs.getByName("release") }
             // In AGP 9 this single switch covers code shrinking AND resource
             // optimisation; there is no separate shrinkResources property.
             optimization {

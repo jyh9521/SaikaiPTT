@@ -108,7 +108,7 @@ class OverlayIndicator(
                 .distinctUntilChanged()
                 .collect(::apply)
         }
-        logger.i(LogCategory.LIFECYCLE) { "overlay indicator watching" }
+        logger.i(LogCategory.OVERLAY) { "overlay indicator watching" }
     }
 
     override suspend fun stop() {
@@ -160,7 +160,7 @@ class OverlayIndicator(
         // system settings while the service is running, and the first sign of
         // that would otherwise be the exception below.
         if (!Settings.canDrawOverlays(service)) {
-            logger.i(LogCategory.LIFECYCLE) { "overlay not shown: permission not granted" }
+            logger.i(LogCategory.OVERLAY) { "overlay not shown: permission not granted" }
             return false
         }
 
@@ -179,11 +179,11 @@ class OverlayIndicator(
             // The permission was granted a moment ago and is not now, or the ROM
             // refuses the window type. Neither is worth a crash: the notification
             // is already saying the same thing.
-            logger.w(LogCategory.LIFECYCLE) { "overlay refused by the window manager" }
+            logger.w(LogCategory.OVERLAY) { "overlay refused by the window manager" }
             clearViews()
             false
         } catch (error: SecurityException) {
-            logger.w(LogCategory.LIFECYCLE) { "overlay refused: ${error.message}" }
+            logger.w(LogCategory.OVERLAY) { "overlay refused: ${error.message}" }
             clearViews()
             false
         }
@@ -319,7 +319,7 @@ class OverlayIndicator(
         try {
             service.startActivity(intent)
         } catch (error: SecurityException) {
-            logger.w(LogCategory.LIFECYCLE) { "could not open the app from the overlay" }
+            logger.w(LogCategory.OVERLAY) { "could not open the app from the overlay" }
         }
     }
 

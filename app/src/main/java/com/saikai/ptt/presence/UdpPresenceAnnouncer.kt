@@ -24,12 +24,9 @@ import com.saikai.ptt.network.UdpTransport
 import com.saikai.ptt.core.common.repeatEvery
 import com.saikai.ptt.core.common.subsystemScope
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.InetAddress
 
