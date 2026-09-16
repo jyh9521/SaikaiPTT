@@ -17,12 +17,16 @@
 | ADR-003 | 协议二进制线格式 | Accepted | Task11, Task12 |
 | ADR-004 | 音频参数与 AudioFocus 策略 | Accepted | Task05, Task20-24 |
 | ADR-005 | 前台服务、Android 版本兼容与电源锁 | Accepted | Task02, Task15, Task30 |
-| ADR-006 | 离线日语 ASR 引擎与模型分发 | Accepted | Task02, Task03, Task41 |
+| ADR-006 | 离线日语 ASR 引擎与模型分发 | **Superseded by ADR-011** | Task02, Task03 |
 | ADR-007 | Opus 编解码库选型与集成 | Accepted | Task22, Task23, Task26 |
 | ADR-008 | 播放路由：改用 `USAGE_MEDIA` | Accepted | Task21, Task26 |
 | ADR-009 | 页面导航：手写状态，不引入 Navigation 库 | Accepted | Task33, Task35, Task36, Task37 |
 | ADR-010 | 导航加入返回栈（仍不引入 Navigation 库） | Accepted | Task35, Task36, Task37 |
+| ADR-011 | ASR 引擎复核：v1 不集成离线日语识别 | Accepted | Task41, Task44 |
 
 `ADR-008` 修订 `ADR-004 §3` 的两条（usage 与音量流），其余部分仍以 `ADR-004` 为准。
 
 `ADR-010` 修订 `ADR-009` 的「没有返回栈」一条，其余部分仍以 `ADR-009` 为准。
+
+`ADR-011` 取代 `ADR-006 §1`（引擎）与 `§2/§4`（「约 50 MB」的体积假设）。
+`ADR-006 §2` 的模型分发形态在将来重新引入 ASR 时仍然适用。

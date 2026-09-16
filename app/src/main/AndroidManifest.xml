@@ -8,9 +8,11 @@
         The <service> element is declared at the bottom, alongside the activity.
     -->
 
-    <!-- Network. INTERNET covers UDP sockets on the LAN; the app makes no
-         Internet requests except the optional one-time ASR model download
-         (ADR-006). -->
+    <!-- Network. Android requires INTERNET for any socket at all, including
+         the LAN UDP this app is built on, so the permission is not evidence of
+         Internet use: v1 makes no Internet requests whatsoever. ADR-006 had
+         reserved exactly one, a one-time ASR model download, and ADR-011
+         removed it along with the feature. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
