@@ -74,12 +74,16 @@
 
 ### 2.3 仪器测试（`connectedDebugAndroidTest`，需真机）
 
+开发者在真机上执行 `connectedDebugAndroidTest`，**全部通过**。
+
 | 测试类 | 用例数 | 对应 TC | 状态 |
 |---|---|---|---|
-| `ApplicationContextTest` | — | — | 未测 |
-| `OpusVoiceCodecTest` | — | TC-AUDIO-* | 未测 |
-| `CommunicationRecordDaoTest` | 34 | TC-HIST-*, TC-SEARCH-*, TC-CLEAN-002 | 未测（Task42 新增 20 例） |
-| `HistoryCleanupTest` | 14 | TC-CLEAN-001/004/005/006, TC-CONS-005/006 | 未测（Task42 新增） |
+| `ApplicationContextTest` | 1 | — | **Pass** |
+| `OpusVoiceCodecTest` | — | TC-AUDIO-* | **Pass** |
+| `CommunicationRecordDaoTest` | 34 | TC-HIST-*, TC-SEARCH-*, TC-CLEAN-002 | **Pass**（Task42 新增 20 例） |
+| `HistoryCleanupTest` | 14 | TC-CLEAN-001/004/005/006, TC-CONS-005/006 | **Pass**（Task42 新增） |
+
+设备与日期由开发者补入 §1 的表。
 
 ---
 
@@ -97,10 +101,10 @@
 | TC-SEQ-001~008 | 序号推进、乱序、重复、回绕、sender mismatch | `SequenceNumbersTest` `VoiceReceiverTest` | **Pass** |
 | TC-FI-RACE-* | 强插与会话所有权竞态 | `SessionOwnershipRaceTest` `SessionManagerTest` | **Pass** |
 | TC-NEG-* | 畸形包、超大 payload、未知类型、洪泛限速 | `PacketValidatorTest` `PacketRateLimiterTest` | **Pass** |
-| TC-CLEAN-002 | 收藏不被自动清理 | `HistoryCleanerTest`（`:core`）+ `CommunicationRecordDaoTest`（真机） | **Pass**（core 层） |
+| TC-CLEAN-002 | 收藏不被自动清理 | `HistoryCleanerTest` + `CommunicationRecordDaoTest` + `HistoryCleanupTest`（真机） | **Pass** |
 | TC-CLEAN-003 | 单个文件删除失败不中止整轮 | `HistoryCleanerTest` | **Pass** |
-| TC-CONS-005 | 正在录制的文件受保护 | `HistoryCleanerTest` `ActiveRecordingsTest` | **Pass**（core 层） |
-| TC-CONS-006 | 正在播放的文件受保护 | `HistoryCleanerTest` `ActiveRecordingsTest` | **Pass**（core 层） |
+| TC-CONS-005 | 正在录制的文件受保护 | `HistoryCleanerTest` + `HistoryCleanupTest`（真机） | **Pass** |
+| TC-CONS-006 | 正在播放的文件受保护 | `HistoryCleanerTest` + `HistoryCleanupTest`（真机） | **Pass** |
 | — | 录音文件路径与目录布局 | `RecordingPathsTest` `LocalRecordingFilesTest` | **Pass** |
 | — | Ogg/Opus 容器字节级正确性 | `OggOpusWriterTest` | **Pass** |
 | — | 架构规则（模块边界、Compose 隔离、README） | `ArchitectureRulesTest` ×2 | **Pass** |
@@ -132,13 +136,13 @@
 | TC-CONS-003 | 磁盘写满 | 未测 | 需要人为填满存储 |
 | TC-CONS-004 | 录音写盘不阻塞实时路径 | 未测 | |
 | TC-CONS-007 | History 故障隔离 | 未测 | |
-| TC-CLEAN-001 | 音频同步删除 | 未测 | `HistoryCleanupTest` 覆盖，待跑 |
-| TC-CLEAN-004 | 孤立文件扫描 | 未测 | `HistoryCleanupTest` 覆盖，待跑 |
-| TC-CLEAN-005 | 手动删除单条 | 未测 | `HistoryCleanupTest` 覆盖，待跑 |
-| TC-CLEAN-006 | 批量删除 | 未测 | `HistoryCleanupTest` 覆盖，待跑 |
+| TC-CLEAN-001 | 音频同步删除 | **Pass** | `HistoryCleanupTest` |
+| TC-CLEAN-004 | 孤立文件扫描 | **Pass** | `HistoryCleanupTest` |
+| TC-CLEAN-005 | 手动删除单条 | **Pass** | `HistoryCleanupTest` |
+| TC-CLEAN-006 | 批量删除 | **Pass** | `HistoryCleanupTest` |
 | TC-FAV-* | 收藏保护 | 未测 | |
 | TC-UNREAD-* | 未读标记与清除 | 未测 | |
-| TC-SEARCH-* | 用户名与字幕搜索 | 未测 | `CommunicationRecordDaoTest` 覆盖，待跑 |
+| TC-SEARCH-* | 用户名与字幕搜索 | **Pass** | `CommunicationRecordDaoTest`，含五种文字与 `%` `_` `\\` 转义 |
 | TC-LC-001 | 旋转 | 未测 | |
 | TC-LC-002 | 返回键 | 未测 | |
 | TC-LC-003 | 进程被杀 | 未测 | |
@@ -207,7 +211,8 @@
 | TC-LEAK-* | 内存泄漏 | 见 `§43` | | 未测 |
 | TC-BATT-* | 耗电 | 见 `§44` | | 未测 |
 
-> 这一整节是 **Task43** 的工作。这里列出来是为了让报告完整，不是为了在这里填。
+> 这一整节是 **Task43** 的工作，测量方法与记录表在 `docs/10_PerformanceMeasurement.md`。
+> 这里列出来是为了让报告完整，填完之后把 §12 的汇总表抄进本文件 §7。
 
 ---
 
@@ -221,7 +226,7 @@
 | `:core` 单元测试 | Pass（425 / 425） |
 | `:app` 单元测试（沙箱可跑部分） | Pass（31 / 31） |
 | `:app` 单元测试（完整） | 未跑 |
-| 仪器测试 | 未跑 |
+| 仪器测试 | **Pass**（真机执行，全部通过） |
 | 真机功能测试 | 未开始 |
 | 性能测试 | 未开始（Task43） |
 
@@ -249,20 +254,30 @@
 | 6 | 悬浮窗的日志走 `LogCategory.LIFECYCLE` 而不是已存在的 `LogCategory.OVERLAY`，导致其 INFO 日志会进入 release 构建 | Task36 | 低 |
 | 7 | 三处历史遗留的未使用 import：`ui/theme/Theme.kt`、`discovery/UdpPeerDiscovery.kt`、`presence/UdpPresenceAnnouncer.kt` | 早期 | 低 |
 | 8 | `app/service/README.md` 里各 Android 版本通知行为的「待実測記録」表仍为空 | Task31 | 低 |
-| 9 | ADR-007 的「低端设备上的编码耗时」仍未实测 | Task23 | 中，Task43 处理 |
+| 9 | ADR-007 的「低端设备上的编码耗时」仍未实测 | Task23 | 中，位置在 `10_PerformanceMeasurement.md §3` |
 | 10 | v1 不含 ASR；README 与隐私说明需改写为「无任何联网例外」 | Task41 / ADR-011 | 中，Task44 处理 |
 
 ---
 
 ## 7. Performance
 
-本轮无。见 **Task43**。
+**一个数都还没测。**
+
+测量手册与空记录表在 `docs/10_PerformanceMeasurement.md`（Task43 建立）：
+口径、每项指标的 adb 命令、以及没达标时该走哪条路。
+全部测完之后，把那份文件 §12 的汇总表抄到这里。
+
+`ADR-007` 里「低端设备上的 Opus 编码耗时」从 Task23 起一直空着，
+在手册 §3 里有它的位置。
 
 ---
 
 ## 8. Conclusion
 
-**可以进入 Task43，但不能进入发布。**
+**可以进入 Task44，但不能进入发布。**
+
+> 更新（Task43）：仪器测试已在真机通过，存储层不再是盲区。
+> 性能测量的手册已经写好，但**一个指标都还没测**，所以发布阻塞项没有减少。
 
 理由：`§62` 的优先级规则说的是「PTT 不稳定 / 后台收不到 / 网络无法恢复」时不能推进——
 这三件事目前**状态未知**，而未知不等于通过。Task43 是性能测量，本身也要在真机上跑，
@@ -273,7 +288,7 @@
 1. §3.3 全部两机用例
 2. §3.4 的四机阻塞项
 3. TC-I18N-005 字体渲染（低端机）
-4. §3.6 全部性能指标
+4. §3.6 全部性能指标（`docs/10_PerformanceMeasurement.md`）
 5. 已知问题 #1 #3 #10
 
 ---

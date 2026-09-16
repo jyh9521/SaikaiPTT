@@ -484,6 +484,19 @@ The database stores metadata and the local audio file path.
 
 ## 18. Offline Speech Recognition
 
+> **Not in v1.** The engine review `ADR-006 §1` required was carried out in
+> Task41 and Vosk failed it: its published Android `.so` is built with NDK 25
+> and no 16 KB page-size flag, which §4.1 lists as a red line. The engine that
+> passes has no Japanese model smaller than 111 MB. See
+> `docs/ADR/ADR-011-ASR-Engine-Review.md`, which supersedes ADR-006.
+>
+> This section stays as written because it is still the design for whenever a
+> suitable engine and model exist, and because the data model already carries
+> the five transcript states. **Two things below are wrong for v1 and §37 puts
+> the ADR above this file:** §18.2's networking exception does not exist -- v1
+> needs the Internet for nothing at all, which is what the README and the
+> privacy statement must say -- and the recommended engine is no longer Vosk.
+
 Offline speech-to-text is an optional feature. Recognition itself is 100% local: no cloud ASR, no audio upload, no remote API.
 
 Current language requirement: Japanese only.
@@ -1005,14 +1018,22 @@ An accepted ADR is never edited silently. To change a decision, write a new ADR 
 
 ### 37.1 Current ADRs
 
-| ADR | Subject |
-|---|---|
-| ADR-001 | Discovery strategy — pure UDP broadcast |
-| ADR-002 | Transport and ports — two sockets, two receive threads |
-| ADR-003 | Protocol wire format — 72-byte header, packet types, validation order |
-| ADR-004 | Audio parameters, Opus settings, jitter buffer, AudioFocus policy |
-| ADR-005 | Foreground service types, Android version compatibility, power locks |
-| ADR-006 | Offline Japanese ASR engine and model delivery |
+| ADR | Subject | Status |
+|---|---|---|
+| ADR-001 | Discovery strategy — pure UDP broadcast | Accepted |
+| ADR-002 | Transport and ports — two sockets, two receive threads | Accepted |
+| ADR-003 | Protocol wire format — 72-byte header, packet types, validation order | Accepted |
+| ADR-004 | Audio parameters, Opus settings, jitter buffer, AudioFocus policy | Accepted |
+| ADR-005 | Foreground service types, Android version compatibility, power locks | Accepted |
+| ADR-006 | Offline Japanese ASR engine and model delivery | **Superseded by ADR-011** |
+| ADR-007 | Opus codec: which library, and how it is built | Accepted |
+| ADR-008 | Playback routing — `USAGE_MEDIA` rather than voice communication | Accepted |
+| ADR-009 | Navigation — hand-written state, no navigation library | Accepted |
+| ADR-010 | Navigation gains a back stack (still no library) | Accepted |
+| ADR-011 | ASR engine review — v1 ships without offline Japanese recognition | Accepted |
+
+The authoritative index, including which ADR revises which, is
+`docs/ADR/README.md`. This table is a pointer, not a second source.
 
 **Read the relevant ADRs before implementing any task that touches those areas.** Where an ADR and a `docs/` file disagree, the ADR wins and the doc must be corrected.
 
