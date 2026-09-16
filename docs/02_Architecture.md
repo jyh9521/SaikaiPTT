@@ -217,6 +217,7 @@ app/
   service/       Foreground Service 与 coordinator
   overlay/       悬浮窗
   asr/           离线识别
+  usecase/       业务动作（§4.3），UI 与实现之间的那条边界
   ui/            Compose、ViewModel
   di/            依赖装配
 ```
@@ -232,7 +233,8 @@ app/
 ```text
 app  ──────────────► core
  │
- ├─ ui        ─► core.domain, core.config
+ ├─ ui        ─► app.usecase, core.domain, core.config
+ ├─ usecase   ─► core.domain, core.session, app.service（ServiceStatus / PttGateway）
  ├─ service   ─► core.session, core.domain, app.network, app.discovery,
  │                app.presence, app.audio, app.overlay
  ├─ network   ─► core.protocol, core.config, core.common, core.logger

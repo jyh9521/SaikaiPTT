@@ -15,22 +15,64 @@
 <resources>
     <string name="app_name">西海PTT</string>
 
-    <!-- Placeholder screen, replaced by the real Home in Task32. -->
-    <string name="placeholder_subtitle">プロジェクトの初期化が完了しました</string>
-    <string name="placeholder_language_label">表示言語</string>
+    <!-- Home screen (Task32, docs/04_UI_UX.md sections 9 to 15). -->
+    <string name="home_active_user">使用中：%1$s</string>
+    <string name="home_no_active_user">名前が設定されていません</string>
+    <string name="home_peers_title">オンラインのデバイス</string>
+    <string name="home_no_peers">現在オンラインのデバイスはありません。</string>
+    <string name="home_searching">デバイスを検索しています…</string>
+    <string name="home_peers_unavailable">WiFi に接続されていないため、デバイスを表示できません。</string>
+    <string name="home_network_offline">WiFi に接続されていません</string>
+    <string name="home_service_stopped">通信サービスは停止しています</string>
+    <string name="home_service_starting">開始しています…</string>
+    <string name="home_service_stopping">停止しています…</string>
+    <string name="home_service_failed">通信サービスを開始できませんでした</string>
+    <string name="home_service_start">開始</string>
+    <string name="home_selected">選択中</string>
+    <string name="home_target">対話相手：%1$s</string>
+    <string name="home_target_none">相手を選んでください</string>
 
-    <!-- Debug only, removed with the placeholder screen in Task32. -->
-    <string name="placeholder_service_label">通信サービス</string>
-    <string name="placeholder_name_label">名前</string>
-    <string name="placeholder_name_set">設定</string>
-    <string name="placeholder_mic_test">マイク</string>
-    <string name="placeholder_speaker_test">スピーカー</string>
-    <string name="placeholder_peers_label">端末</string>
-    <string name="placeholder_service_start">開始</string>
-    <string name="placeholder_service_stop">停止</string>
-    <string name="placeholder_talk">押して話す</string>
-    <string name="placeholder_session_label">セッション</string>
-    <string name="placeholder_reception_label">受信統計</string>
+    <!--
+        Peer state. Shown as text beside the status shape, never as colour
+        alone (docs/04_UI_UX.md section 11.3). DISCOVERED is an internal
+        distinction and is shown as オンライン (section 25).
+    -->
+    <string name="peer_state_online">オンライン</string>
+    <string name="peer_state_busy">通話中</string>
+    <string name="peer_state_communicating">この端末と通話中</string>
+    <string name="peer_state_offline">オフライン</string>
+
+    <!-- The talk button and the line above it. -->
+    <string name="ptt_hold_to_talk">押して話す</string>
+    <string name="ptt_release_to_end">離すと終了</string>
+    <string name="ptt_requesting">呼び出し中…</string>
+    <string name="ptt_receiving">%1$s さんが話しています</string>
+    <string name="ptt_receiving_unknown">受信中です</string>
+    <string name="ptt_receiving_busy">受信中</string>
+    <string name="ptt_unavailable">話せません</string>
+
+    <!-- What happened to the last attempt (docs/04_UI_UX.md sections 21 and 22.3). -->
+    <string name="ptt_message_target_busy">相手は通話中です。</string>
+    <string name="ptt_message_no_response">相手が応答しません。</string>
+    <string name="ptt_message_no_name">先に名前を設定してください。</string>
+    <string name="ptt_message_no_microphone">マイクを使用できません。</string>
+    <string name="ptt_message_app_not_visible">画面を表示したまま操作してください。</string>
+    <string name="ptt_message_unreachable">相手に接続できません。</string>
+    <string name="ptt_message_already_in_session">すでに通話中です。</string>
+    <string name="ptt_message_interrupted">通話が中断されました。</string>
+
+    <!--
+        Debug-only controls on the Home screen. The name editor is replaced by
+        Task33 and the language buttons and the service switch by Task35; until
+        then they are the only way to set a name or change the language, and an
+        app with no way to set a name cannot be used at all. Never shipped:
+        guarded by BuildConfig.DEBUG, and docs/08_ReleaseChecklist.md section 43
+        forbids test UI in a release.
+    -->
+    <string name="debug_name_label">名前</string>
+    <string name="debug_name_set">設定</string>
+    <string name="debug_language_label">表示言語</string>
+    <string name="debug_service_stop">サービス停止</string>
 
     <!-- Ongoing foreground-service notification (Task31, docs/04_UI_UX.md 18.2). -->
     <string name="notification_channel_communication">通信</string>

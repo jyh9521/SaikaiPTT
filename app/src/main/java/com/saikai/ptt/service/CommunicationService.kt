@@ -72,6 +72,7 @@ class CommunicationService : Service() {
     private var container: ServiceContainer? = null
     private var lifecycle: ServiceLifecycle? = null
     private var peerMirror: Job? = null
+    private var outcomeMirror: Job? = null
     private var recovery: NetworkRecovery? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -163,6 +164,12 @@ class CommunicationService : Service() {
                 peerMirror = scope.launch {
                     serviceContainer.peers.peers.collect(status::publishPeers)
                 }
+                // Outcomes are the only way the UI learns that a call was
+                // refused or unanswered: those never reach the session state,
+                // which is back to Idle by the time anyone looks.
+                outcomeMirror = scope.launch {
+                    serviceContainer.sessions.outcomes.collect(status::publishOutcome)
+                }
                 // Started after the lifecycle, and above it: recovery cycles a
                 // suffix of the very list that would otherwise contain it.
                 recovery = NetworkRecovery(
@@ -200,6 +207,8 @@ class CommunicationService : Service() {
         (application as? SaikaiApplication)?.container?.ptt?.detach()
         peerMirror?.cancel()
         peerMirror = null
+        outcomeMirror?.cancel()
+        outcomeMirror = null
         // Before the lifecycle: a recovery that fired mid-shutdown would try to
         // restore the very steps being released.
         recovery?.stop()

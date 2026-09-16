@@ -2,8 +2,12 @@ package com.saikai.ptt.service
 
 import com.saikai.ptt.core.domain.Peer
 import com.saikai.ptt.core.session.ReceptionStats
+import com.saikai.ptt.core.session.SessionOutcome
 import com.saikai.ptt.core.session.SessionState
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -73,6 +77,26 @@ class ServiceStatus {
 
     fun publishReception(stats: ReceptionStats?) {
         if (stats != null) _lastReception.value = stats
+    }
+
+    private val _outcomes = MutableSharedFlow<SessionOutcome>(
+        replay = 0,
+        extraBufferCapacity = 8,
+    )
+
+    /**
+     * How sessions finished, for whatever wants to say so.
+     *
+     * A shared flow rather than a state flow, because these are events and not
+     * a condition. "The peer is busy" is true for the moment it is shown and
+     * false afterwards; held in a state flow it would be redelivered to the
+     * next screen that collected it, and a user who rotated their phone would
+     * be told again about a call they abandoned a minute ago.
+     */
+    val outcomes: SharedFlow<SessionOutcome> = _outcomes.asSharedFlow()
+
+    fun publishOutcome(outcome: SessionOutcome) {
+        _outcomes.tryEmit(outcome)
     }
 
     fun publish(state: ServiceState) {

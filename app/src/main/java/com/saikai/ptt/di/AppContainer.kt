@@ -13,6 +13,15 @@ import com.saikai.ptt.AppVisibility
 import com.saikai.ptt.logging.AndroidLogSink
 import com.saikai.ptt.service.PttGateway
 import com.saikai.ptt.service.ServiceStatus
+import com.saikai.ptt.usecase.HomeUseCases
+import com.saikai.ptt.usecase.ObserveActiveUser
+import com.saikai.ptt.usecase.ObserveOutcomes
+import com.saikai.ptt.usecase.ObservePeers
+import com.saikai.ptt.usecase.ObserveServiceState
+import com.saikai.ptt.usecase.ObserveSession
+import com.saikai.ptt.usecase.SetServiceRunning
+import com.saikai.ptt.usecase.StartPtt
+import com.saikai.ptt.usecase.StopPtt
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -113,6 +122,28 @@ class AppContainer(
      * "nothing to press yet" has to be an answer rather than a crash.
      */
     val ptt: PttGateway = PttGateway()
+
+    /**
+     * Everything the Home screen is allowed to do, assembled in one place.
+     *
+     * Application scope rather than per-Activity so a rotation does not rebuild
+     * the graph, and lazy so a process started only for a broadcast receiver
+     * never builds it at all. The screen's ViewModel receives this and nothing
+     * else: it is the boundary that keeps the UI from reaching a socket
+     * (`docs/02_Architecture.md` section 4.2).
+     */
+    val homeUseCases: HomeUseCases by lazy {
+        HomeUseCases(
+            observePeers = ObservePeers(serviceStatus),
+            observeServiceState = ObserveServiceState(serviceStatus),
+            observeSession = ObserveSession(serviceStatus),
+            observeOutcomes = ObserveOutcomes(serviceStatus),
+            observeActiveUser = ObserveActiveUser(localUsers),
+            startPtt = StartPtt(ptt),
+            stopPtt = StopPtt(ptt),
+            setServiceRunning = SetServiceRunning(),
+        )
+    }
 
     /**
      * Interface language. Application scope because notifications and the

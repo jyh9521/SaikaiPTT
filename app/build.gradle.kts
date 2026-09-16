@@ -161,6 +161,10 @@ dependencies {
     // (docs/04_UI_UX.md section 4). Nothing beyond Compose and Material 3.
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    // A ViewModel that survives a rotation. The screen state is derived from
+    // flows and would rebuild itself, but the selected target is a choice the
+    // user made and losing it when the phone turns is losing their input.
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

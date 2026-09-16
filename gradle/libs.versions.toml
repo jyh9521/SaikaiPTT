@@ -49,6 +49,11 @@ targetSdk = "36"
 # UI
 composeBom = "2026.08.00"
 activityCompose = "1.13.0"
+# Re-added at Task32, which is the first screen with a ViewModel. The catalog
+# note below asks for the version to be checked when that happens: androidx-main
+# is developing 2.12.0-alpha, so 2.11.0 is the last stable line, chosen the same
+# way activity 1.13.0 was against its own 1.14.0-alpha.
+lifecycle = "2.11.0"
 
 # Storage / concurrency
 # Versions taken from the Gradle cache, which is the only source of truth
@@ -69,6 +74,11 @@ espressoCore = "3.7.0"
 # removed rather than carried: CLAUDE.md section 32 requires justifying each
 # dependency, and an unused one cannot be justified. Re-add them in the task that
 # first needs them, with the version checked at that point.
+#
+# Task32 re-added androidx.lifecycle for lifecycle-viewmodel-compose, which is
+# what gives the Home screen a ViewModel that outlives a rotation. Only that one
+# artifact: lifecycle-runtime-compose would add collectAsStateWithLifecycle, and
+# collectAsState from the Compose runtime already does what this screen needs.
 # -----------------------------------------------------------------------------
 
 [libraries]
@@ -79,6 +89,7 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }

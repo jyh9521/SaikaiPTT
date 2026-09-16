@@ -2,19 +2,48 @@
 <resources>
     <string name="app_name">SaikaiPTT</string>
 
-    <string name="placeholder_subtitle">Project initialised</string>
-    <string name="placeholder_language_label">Display language</string>
-    <string name="placeholder_service_label">Communication service</string>
-    <string name="placeholder_name_label">Name</string>
-    <string name="placeholder_name_set">Set</string>
-    <string name="placeholder_mic_test">Mic</string>
-    <string name="placeholder_speaker_test">Speaker</string>
-    <string name="placeholder_peers_label">Devices</string>
-    <string name="placeholder_service_start">Start</string>
-    <string name="placeholder_service_stop">Stop</string>
-    <string name="placeholder_talk">Hold to talk</string>
-    <string name="placeholder_session_label">Session</string>
-    <string name="placeholder_reception_label">Reception</string>
+    <string name="home_active_user">Using: %1$s</string>
+    <string name="home_no_active_user">No name set</string>
+    <string name="home_peers_title">Devices online</string>
+    <string name="home_no_peers">No devices are online.</string>
+    <string name="home_searching">Searching for devices…</string>
+    <string name="home_peers_unavailable">Not connected to WiFi, so no devices can be shown.</string>
+    <string name="home_network_offline">Not connected to WiFi</string>
+    <string name="home_service_stopped">The communication service is stopped</string>
+    <string name="home_service_starting">Starting…</string>
+    <string name="home_service_stopping">Stopping…</string>
+    <string name="home_service_failed">The communication service could not start</string>
+    <string name="home_service_start">Start</string>
+    <string name="home_selected">Selected</string>
+    <string name="home_target">Talking to: %1$s</string>
+    <string name="home_target_none">Choose someone to talk to</string>
+
+    <string name="peer_state_online">Online</string>
+    <string name="peer_state_busy">In a call</string>
+    <string name="peer_state_communicating">In a call with this device</string>
+    <string name="peer_state_offline">Offline</string>
+
+    <string name="ptt_hold_to_talk">Hold to talk</string>
+    <string name="ptt_release_to_end">Release to end</string>
+    <string name="ptt_requesting">Calling…</string>
+    <string name="ptt_receiving">%1$s is talking</string>
+    <string name="ptt_receiving_unknown">Receiving</string>
+    <string name="ptt_receiving_busy">Receiving</string>
+    <string name="ptt_unavailable">Cannot talk</string>
+
+    <string name="ptt_message_target_busy">That device is already in a call.</string>
+    <string name="ptt_message_no_response">No answer.</string>
+    <string name="ptt_message_no_name">Set a name first.</string>
+    <string name="ptt_message_no_microphone">The microphone is not available.</string>
+    <string name="ptt_message_app_not_visible">Keep the app on screen while talking.</string>
+    <string name="ptt_message_unreachable">That device cannot be reached.</string>
+    <string name="ptt_message_already_in_session">Already in a call.</string>
+    <string name="ptt_message_interrupted">The call was interrupted.</string>
+
+    <string name="debug_name_label">Name</string>
+    <string name="debug_name_set">Set</string>
+    <string name="debug_language_label">Display language</string>
+    <string name="debug_service_stop">Stop service</string>
 
     <string name="notification_channel_communication">Communication</string>
     <string name="notification_channel_communication_description">Shown so the app can keep receiving</string>
