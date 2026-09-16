@@ -170,4 +170,36 @@
     <string name="history_transcript_retry_later">Re-running recognition will come in a later version.</string>
     <string name="home_history_unread">History (%1$d)</string>
 
+
+    <!-- History management: search, selection, deletion, retention (Task40). -->
+    <string name="action_clear">Clear</string>
+    <string name="action_delete">Delete</string>
+    <string name="history_manage">Manage</string>
+    <string name="history_search_label">Search</string>
+    <string name="history_search_hint">Name or transcript</string>
+    <string name="history_no_matches">No records match.</string>
+    <string name="history_selected_count">%1$d selected</string>
+    <string name="history_delete_title">Delete?</string>
+    <string name="history_delete_message">%1$d records and their recordings will be deleted. This cannot be undone.</string>
+    <string name="history_delete_favorites_warning">%1$d of them are favourites.</string>
+    <string name="history_storage_title">Storage</string>
+    <string name="history_storage_measuring">Measuring…</string>
+    <string name="history_storage_summary">%1$d records · %2$s</string>
+    <string name="history_storage_favorites">%1$d of them are favourites (never deleted automatically)</string>
+    <string name="history_retention_title">Retention</string>
+    <string name="history_retention_note">Changing this deletes nothing right now. It takes effect at the next cleanup, or on the button below.</string>
+    <string name="retention_1_day">1 day</string>
+    <string name="retention_3_days">3 days</string>
+    <string name="retention_7_days">7 days</string>
+    <string name="retention_30_days">30 days</string>
+    <string name="retention_forever">Forever</string>
+    <string name="history_cleanup_now">Clean up now</string>
+    <string name="history_cleanup_running">Cleaning up…</string>
+    <string name="history_cleanup_note">Removes records past the retention window, and recordings no record points at. Favourites are never touched.</string>
+    <string name="history_clear_all">Delete all history</string>
+    <string name="history_clear_all_title">Delete all history?</string>
+    <string name="history_clear_all_message">Every record and recording will be deleted. This cannot be undone.</string>
+    <string name="history_clear_favorites_too">Delete favourites too</string>
+    <string name="history_clear_keeps_favorites">Favourites will be kept.</string>
+
 </resources>

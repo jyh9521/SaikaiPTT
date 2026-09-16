@@ -9,12 +9,18 @@ import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.session.SessionState
 import com.saikai.ptt.usecase.HistoryUseCases
 import com.saikai.ptt.usecase.ObserveSession
+import com.saikai.ptt.core.domain.HistoryRetention
+import com.saikai.ptt.usecase.HistoryUsage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -31,6 +37,21 @@ import kotlinx.coroutines.launch
  * model that owns both screens is smaller than giving every destination a
  * payload for the sake of one.
  *
+ * ### Search is a flow, not a mode
+ *
+ * The query is a `StateFlow` the list flow is built from, so there is no
+ * "searching" state to get out of sync with what is on screen and no separate
+ * path for the empty term -- a blank query is the whole history
+ * (`docs/05_DataModel.md` section 28).
+ *
+ * ### Selection lives here, and selecting is not deleting
+ *
+ * The screen asks; this decides nothing until a confirmation comes back.
+ * `docs/05_DataModel.md` sections 38 and 39 require a confirmation for one
+ * record and a second one before favourites go, so the prompts are modelled as
+ * state rather than left to the screen: what is about to be deleted has to be
+ * knowable by the thing that will delete it.
+ *
  * ### A transmission stops playback
  *
  * Watched here rather than inside the player, because the session is the view
@@ -38,13 +59,46 @@ import kotlinx.coroutines.launch
  * voice wins; doing it by audio focus instead would also stop a recording for
  * a notification chime, which is not the same thing.
  */
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class HistoryViewModel(
     private val useCases: HistoryUseCases,
     private val playback: RecordingPlayback,
     observeSession: ObserveSession,
 ) : ViewModel() {
 
-    val rows: StateFlow<List<HistoryRow>> = useCases.observeHistory()
+    private val _query = MutableStateFlow("")
+
+    /** What is in the search box. */
+    val query: StateFlow<String> = _query.asStateFlow()
+
+    private val _selection = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Which rows are ticked. Empty means the list is not in selection mode. */
+    val selection: StateFlow<Set<String>> = _selection.asStateFlow()
+
+    private val _prompt = MutableStateFlow<DeletePrompt?>(null)
+
+    /** The confirmation on screen, or null. */
+    val prompt: StateFlow<DeletePrompt?> = _prompt.asStateFlow()
+
+    private val _usage = MutableStateFlow<HistoryUsage?>(null)
+
+    /** Null until the history settings screen has asked for it. */
+    val usage: StateFlow<HistoryUsage?> = _usage.asStateFlow()
+
+    val retention: StateFlow<HistoryRetention> = useCases.observeRetention()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryRetention.DEFAULT)
+
+    private val _busy = MutableStateFlow(false)
+
+    /** True while a delete or a cleanup pass is running, so the screen can wait. */
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    val rows: StateFlow<List<HistoryRow>> = _query
+        // The search runs against the database, so a keystroke is a query. 250 ms
+        // is below what a person notices and above the fastest anyone types.
+        .debounce { if (it.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS }
+        .flatMapLatest { term -> useCases.observeHistory(term) }
         .map { records ->
             records.map { record ->
                 HistoryRow(
@@ -131,6 +185,110 @@ class HistoryViewModel(
         _detail.value = null
     }
 
+    // --- search ------------------------------------------------------------------------
+
+    fun search(term: String) {
+        _query.value = term
+    }
+
+    fun clearSearch() {
+        _query.value = ""
+    }
+
+    // --- selection ---------------------------------------------------------------------
+
+    fun toggleSelected(id: String) {
+        _selection.value = _selection.value.let { if (id in it) it - id else it + id }
+    }
+
+    fun clearSelection() {
+        _selection.value = emptySet()
+    }
+
+    /**
+     * Asks to delete what is ticked.
+     *
+     * The prompt carries how many of them are favourites, because
+     * `docs/05_DataModel.md` section 39 wants that said out loud rather than
+     * discovered afterwards.
+     */
+    fun requestDeleteSelected() {
+        val ids = _selection.value
+        if (ids.isEmpty()) return
+        val favorites = rows.value.count { it.id in ids && it.isFavorite }
+        _prompt.value = DeletePrompt.Selected(ids, favorites)
+    }
+
+    /** Asks to delete the one record the detail screen is showing. */
+    fun requestDeleteOpen() {
+        val current = _detail.value ?: return
+        _prompt.value = DeletePrompt.Selected(setOf(current.id), if (current.isFavorite) 1 else 0)
+    }
+
+    /** Asks to delete everything. Favourites are a second question. */
+    fun requestClearAll() {
+        _prompt.value = DeletePrompt.Everything(includeFavorites = false)
+    }
+
+    /** The second question of section 39, answered. */
+    fun setClearFavorites(include: Boolean) {
+        val current = _prompt.value as? DeletePrompt.Everything ?: return
+        _prompt.value = current.copy(includeFavorites = include)
+    }
+
+    fun dismissPrompt() {
+        _prompt.value = null
+    }
+
+    /** Carries out whatever [prompt] is asking about. */
+    fun confirmPrompt() {
+        val pending = _prompt.value ?: return
+        _prompt.value = null
+        _busy.value = true
+        viewModelScope.launch {
+            // Whatever goes may be what is playing. Stopping first means the
+            // player is not holding a file that is about to disappear.
+            playback.stop()
+            when (pending) {
+                is DeletePrompt.Selected -> {
+                    useCases.deleteRecords(pending.ids)
+                    val open = _detail.value?.id
+                    if (open != null && open in pending.ids) _detail.value = null
+                }
+
+                is DeletePrompt.Everything -> {
+                    useCases.clearHistory(pending.includeFavorites)
+                    _detail.value = null
+                }
+            }
+            _selection.value = emptySet()
+            refreshUsage()
+            _busy.value = false
+        }
+    }
+
+    // --- history settings ---------------------------------------------------------------
+
+    /** Counted when the screen opens, not observed (`docs/05_DataModel.md` section 45). */
+    fun refreshUsage() {
+        viewModelScope.launch { _usage.value = useCases.readUsage() }
+    }
+
+    fun setRetention(retention: HistoryRetention) {
+        viewModelScope.launch { useCases.setRetention(retention) }
+    }
+
+    /** Runs a cleanup pass now, through the same mutex the service's loop uses. */
+    fun cleanUpNow() {
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            useCases.runCleanup()
+            refreshUsage()
+            _busy.value = false
+        }
+    }
+
     fun play() {
         val current = _detail.value ?: return
         playback.play(current.id, current.audioPath)
@@ -159,6 +317,10 @@ class HistoryViewModel(
     override fun onCleared() {
         playback.stop()
         super.onCleared()
+    }
+
+    private companion object {
+        const val SEARCH_DEBOUNCE_MILLIS = 250L
     }
 
     class Factory(

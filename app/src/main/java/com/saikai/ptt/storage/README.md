@@ -30,8 +30,26 @@ JVM 上被证明（`CommunicationRecordTest`），而不必依赖真机。代价
 DAO 与索引只能在真机上验（`app/src/androidTest/.../CommunicationRecordDaoTest.kt`）：
 DAO 的实现是构建期生成的，它对话的是 Android 自己的 SQLite。
 
+## 清理（Task40）
+
+**「什么时候删、按什么顺序删」在 `core.history`，不在这里。** 那是全应用唯一一处删除
+用户拿不回来的东西的逻辑，它需要被测试，而文件系统调用写在里面就没法测。这里只有两个
+很薄的东西：
+
+- `LocalRecordingFiles` — `core.history.RecordingFiles` 的实现。它是**唯一**一处把
+  数据库里的相对路径（`05_DataModel §19`）拼成绝对路径用于清理的地方。
+  `delete()` 会检查规范化后的路径是否仍在 `records/` 之下才动手——上游出一个 bug 的
+  代价，不该是删掉私有目录里的别的东西。
+- `HistoryMaintenance` — **什么时候跑**。启动时一次，之后每 6 小时一次，跑在前台服务
+  的 scope 里。WorkManager 是另一个答案，但这件事没有 deadline、没有约束条件、也不需要
+  活过进程（`CLAUDE.md` §32）。设置页的「立即整理」和这个循环共用同一个 mutex，
+  两轮不会互相看到对方删了一半的状态。
+
+保留期每轮重新读，不缓存：用户从 30 天改成 1 天，期待的是下一轮就照新的来。
+
 ---
 
 - `DataStoreSettingsRepository` — Task07
 - `history/` Room 通信记录 — Task37
 - 录音文件 — Task38
+- 搜索、批量删除、清理落盘 — Task40

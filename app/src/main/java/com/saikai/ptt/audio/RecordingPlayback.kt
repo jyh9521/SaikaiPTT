@@ -2,6 +2,7 @@ package com.saikai.ptt.audio
 
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import com.saikai.ptt.core.history.ActiveRecordings
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -52,9 +53,16 @@ import java.io.IOException
  *
  * [exists] is the one exception: it touches nothing but the file system and is
  * called from a view model's flow, off the main thread.
+ *
+ * ### Cleanup does not delete what is playing
+ *
+ * An open recording is claimed in [ActiveRecordings] and released by the same
+ * [release] that drops the player, so there is one place to get it wrong and it
+ * is the place that already has to be right.
  */
 class RecordingPlayback(
     private val filesDir: File,
+    private val active: ActiveRecordings,
     private val logger: Logger,
     private val scope: CoroutineScope,
 ) {
@@ -67,6 +75,17 @@ class RecordingPlayback(
 
     /** The record currently loaded, so a second tap on the same row resumes. */
     private var loadedRecordId: String? = null
+
+    /**
+     * The path the loaded record's audio is at, claimed while it is open.
+     *
+     * `docs/05_DataModel.md` section 31: a recording being played must survive
+     * a cleanup pass, and nothing but this player knows it is being played. A
+     * file whose retention window passed while the user was listening to it is
+     * removed on the next pass instead, which is the right answer for something
+     * one button press from being finished with.
+     */
+    private var claimedPath: String? = null
 
     /**
      * Whether a file is actually there.
@@ -87,13 +106,14 @@ class RecordingPlayback(
      */
     fun play(recordId: String, audioPath: String?): Boolean {
         val file = audioPath?.let { File(filesDir, it) }
-        if (file == null || !file.isFile) {
+        if (audioPath == null || file == null || !file.isFile) {
             logger.w(LogCategory.STORAGE) { "no recording file to play" }
             _state.value = PlaybackState(error = PlaybackError.MISSING_FILE)
             return false
         }
 
         if (loadedRecordId == recordId) {
+            // Already claimed; a resume must not claim it a second time.
             val current = player
             if (current != null) {
                 current.start()
@@ -125,6 +145,8 @@ class RecordingPlayback(
             }
             player = created
             loadedRecordId = recordId
+            active.claim(audioPath)
+            claimedPath = audioPath
             created.start()
             _state.value = PlaybackState(
                 playing = true,
@@ -229,6 +251,8 @@ class RecordingPlayback(
         }
         player = null
         loadedRecordId = null
+        claimedPath?.let { active.release(it) }
+        claimedPath = null
     }
 
     private companion object {

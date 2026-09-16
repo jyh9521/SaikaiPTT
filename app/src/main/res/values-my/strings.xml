@@ -158,4 +158,36 @@
     <string name="history_transcript_retry_later">ပြန်လည်အသိအမှတ်ပြုခြင်းကို နောက်ဗားရှင်းတွင် ထည့်သွင်းပါမည်။</string>
     <string name="home_history_unread">မှတ်တမ်း (%1$d)</string>
 
+
+    <!-- History management: search, selection, deletion, retention (Task40). -->
+    <string name="action_clear">ရှင်းမည်</string>
+    <string name="action_delete">ဖျက်မည်</string>
+    <string name="history_manage">စီမံမည်</string>
+    <string name="history_search_label">ရှာမည်</string>
+    <string name="history_search_hint">အမည် သို့မဟုတ် စာတန်းထိုး</string>
+    <string name="history_no_matches">ကိုက်ညီသော မှတ်တမ်း မရှိပါ။</string>
+    <string name="history_selected_count">%1$d ခု ရွေးထားသည်</string>
+    <string name="history_delete_title">ဖျက်မလား။</string>
+    <string name="history_delete_message">မှတ်တမ်း %1$d ခုနှင့် ၎င်းတို့၏ အသံဖမ်းချက်များကို ဖျက်ပါမည်။ ပြန်ယူ၍ မရပါ။</string>
+    <string name="history_delete_favorites_warning">၎င်းတို့အနက် %1$d ခုမှာ အကြိုက်ဆုံး ဖြစ်သည်။</string>
+    <string name="history_storage_title">သိမ်းဆည်းမှု</string>
+    <string name="history_storage_measuring">တွက်ချက်နေသည်…</string>
+    <string name="history_storage_summary">မှတ်တမ်း %1$d ခု · %2$s</string>
+    <string name="history_storage_favorites">၎င်းတို့အနက် %1$d ခုမှာ အကြိုက်ဆုံး ဖြစ်သည် (အလိုအလျောက် မဖျက်ပါ)</string>
+    <string name="history_retention_title">သိမ်းထားမည့် ကာလ</string>
+    <string name="history_retention_note">ကာလကို ပြောင်းလိုက်ရုံဖြင့် ချက်ချင်း မဖျက်ပါ။ နောက်တစ်ကြိမ် အလိုအလျောက် ရှင်းလင်းချိန် သို့မဟုတ် အောက်ပါခလုတ်ဖြင့် သက်ရောက်ပါမည်။</string>
+    <string name="retention_1_day">၁ ရက်</string>
+    <string name="retention_3_days">၃ ရက်</string>
+    <string name="retention_7_days">၇ ရက်</string>
+    <string name="retention_30_days">၃၀ ရက်</string>
+    <string name="retention_forever">အကန့်အသတ်မရှိ</string>
+    <string name="history_cleanup_now">ယခု ရှင်းလင်းမည်</string>
+    <string name="history_cleanup_running">ရှင်းလင်းနေသည်…</string>
+    <string name="history_cleanup_note">သိမ်းထားမည့် ကာလ ကျော်လွန်သော မှတ်တမ်းများနှင့် မည်သည့်မှတ်တမ်းကမျှ မညွှန်းသော အသံဖိုင်များကို ဖျက်ပါမည်။ အကြိုက်ဆုံးများကို မထိပါ။</string>
+    <string name="history_clear_all">မှတ်တမ်းအားလုံး ဖျက်မည်</string>
+    <string name="history_clear_all_title">မှတ်တမ်းအားလုံး ဖျက်မလား။</string>
+    <string name="history_clear_all_message">မှတ်တမ်းနှင့် အသံဖမ်းချက် အားလုံးကို ဖျက်ပါမည်။ ပြန်ယူ၍ မရပါ။</string>
+    <string name="history_clear_favorites_too">အကြိုက်ဆုံးများကိုပါ ဖျက်မည်</string>
+    <string name="history_clear_keeps_favorites">အကြိုက်ဆုံးများကို ချန်ထားပါမည်။</string>
+
 </resources>

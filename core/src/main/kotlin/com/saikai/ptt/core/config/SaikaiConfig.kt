@@ -4,6 +4,7 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
 import com.saikai.ptt.core.protocol.WireFormat
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -448,9 +449,21 @@ data class RateLimitConfig(
 data class HistoryConfig(
     /** Bounded: a recording that cannot be transcribed must not be retried forever. */
     val asrMaxRetries: Int = 3,
+    /**
+     * How often cleanup runs while the service is up.
+     *
+     * Six hours, which is a compromise between two things that both matter
+     * less than they sound. Retention is a policy about days, so nothing is
+     * gained by checking more often; but a device that is never restarted --
+     * the intended deployment, a radio left on all day -- would never clean up
+     * at all if this only ran at start-up. One pass is a query and a directory
+     * walk over a few thousand entries.
+     */
+    val cleanupInterval: Duration = 6.hours,
 ) {
     init {
         require(asrMaxRetries in 0..10) { "Unbounded ASR retries would burn battery on a bad file" }
+        require(cleanupInterval > Duration.ZERO) { "A cleanup loop needs a positive interval" }
     }
 }
 

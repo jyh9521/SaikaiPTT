@@ -163,6 +163,7 @@ class ServiceContainer(
         localDeviceId = localDeviceId,
         localUserId = { activeUser.value?.id },
         history = app.history,
+        active = app.activeRecordings,
         onStorageError = app.serviceStatus::publishStorageError,
         logger = app.logger,
         scope = scope,

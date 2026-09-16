@@ -37,7 +37,9 @@ import com.saikai.ptt.di.AppContainer
 import com.saikai.ptt.locale.AppLocale
 import com.saikai.ptt.permissions.AppPermission
 import com.saikai.ptt.permissions.PermissionNavigator
+import com.saikai.ptt.ui.history.DeleteDialog
 import com.saikai.ptt.ui.history.HistoryDetailScreen
+import com.saikai.ptt.ui.history.HistorySettingsScreen
 import com.saikai.ptt.ui.history.HistoryListScreen
 import com.saikai.ptt.ui.history.HistoryViewModel
 import com.saikai.ptt.ui.home.HomeScreen
@@ -143,7 +145,14 @@ class MainActivity : ComponentActivity() {
                 val destination = stack.last()
                 val open: (Destination) -> Unit = { next -> stack = stack + next }
                 val goBack: () -> Unit = {
-                    if (stack.size > 1) {
+                    if (destination == Destination.HISTORY &&
+                        history.selection.value.isNotEmpty()
+                    ) {
+                        // Backing out of a selection is not backing out of the
+                        // screen. The bar at the top says the list is in a mode;
+                        // back leaves the mode first.
+                        history.clearSelection()
+                    } else if (stack.size > 1) {
                         // Leaving the detail releases the player, whether the
                         // user used the screen's own button or the system one.
                         // Here rather than in the screen's `onBack` because the
@@ -208,30 +217,78 @@ class MainActivity : ComponentActivity() {
                             modifier = padded,
                         )
 
-                        destination == Destination.HISTORY -> HistoryListScreen(
-                            rows = history.rows,
-                            onOpen = { id ->
-                                history.open(id)
-                                open(Destination.HISTORY_DETAIL)
-                            },
+                        destination == Destination.HISTORY -> {
+                            HistoryListScreen(
+                                rows = history.rows,
+                                query = history.query,
+                                selection = history.selection,
+                                onSearch = history::search,
+                                onOpen = { id ->
+                                    history.open(id)
+                                    open(Destination.HISTORY_DETAIL)
+                                },
+                                onToggleSelected = history::toggleSelected,
+                                onClearSelection = history::clearSelection,
+                                onDeleteSelected = history::requestDeleteSelected,
+                                onOpenSettings = { open(Destination.HISTORY_SETTINGS) },
+                                onBack = goBack,
+                                modifier = padded,
+                            )
+                            // Declared after the screen so it is on top of it,
+                            // and shared with the detail screen: one dialog
+                            // decides what a deletion says.
+                            DeleteDialog(
+                                prompt = history.prompt.collectAsState().value,
+                                onSetClearFavorites = history::setClearFavorites,
+                                onConfirm = history::confirmPrompt,
+                                onDismiss = history::dismissPrompt,
+                            )
+                        }
+
+                        destination == Destination.HISTORY_SETTINGS -> HistorySettingsScreen(
+                            retention = history.retention,
+                            usage = history.usage,
+                            busy = history.busy,
+                            prompt = history.prompt,
+                            onSetRetention = history::setRetention,
+                            onRefresh = history::refreshUsage,
+                            onCleanUpNow = history::cleanUpNow,
+                            onRequestClearAll = history::requestClearAll,
+                            onSetClearFavorites = history::setClearFavorites,
+                            onConfirmPrompt = history::confirmPrompt,
+                            onDismissPrompt = history::dismissPrompt,
                             onBack = goBack,
                             modifier = padded,
                         )
 
-                        destination == Destination.HISTORY_DETAIL -> HistoryDetailScreen(
-                            detail = history.detail,
-                            playback = history.playbackState,
-                            unavailable = history::unavailable,
-                            onPlay = history::play,
-                            onPause = history::pause,
-                            onStop = history::stopPlayback,
-                            onToggleFavorite = history::toggleFavorite,
-                            // `goBack` releases the player; the list behind is
-                            // still live, so the record it just marked read
-                            // redraws on its own.
-                            onBack = goBack,
-                            modifier = padded,
-                        )
+                        destination == Destination.HISTORY_DETAIL -> {
+                            HistoryDetailScreen(
+                                detail = history.detail,
+                                playback = history.playbackState,
+                                unavailable = history::unavailable,
+                                onPlay = history::play,
+                                onPause = history::pause,
+                                onStop = history::stopPlayback,
+                                onToggleFavorite = history::toggleFavorite,
+                                onDelete = history::requestDeleteOpen,
+                                // `goBack` releases the player; the list behind
+                                // is still live, so the record it just marked
+                                // read redraws on its own.
+                                onBack = goBack,
+                                modifier = padded,
+                            )
+                            DeleteDialog(
+                                prompt = history.prompt.collectAsState().value,
+                                onSetClearFavorites = history::setClearFavorites,
+                                // The record this screen is showing is the one
+                                // that goes, so leaving is part of confirming.
+                                onConfirm = {
+                                    history.confirmPrompt()
+                                    goBack()
+                                },
+                                onDismiss = history::dismissPrompt,
+                            )
+                        }
 
                         destination == Destination.LANGUAGE -> LanguageScreen(
                             current = settings.language,
@@ -398,7 +455,16 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Which screen is open, once the first run is done. */
-private enum class Destination { HOME, USERS, PERMISSIONS, SETTINGS, LANGUAGE, HISTORY, HISTORY_DETAIL }
+private enum class Destination {
+    HOME,
+    USERS,
+    PERMISSIONS,
+    SETTINGS,
+    LANGUAGE,
+    HISTORY,
+    HISTORY_DETAIL,
+    HISTORY_SETTINGS,
+}
 
 /** Shown for the one frame or two before storage answers. */
 @Composable

@@ -35,6 +35,25 @@ interface HistoryRepository {
     /** Newest first, up to [limit]. Re-emits on every change. */
     fun observeRecent(limit: Int = DEFAULT_PAGE): Flow<List<CommunicationRecord>>
 
+    /**
+     * Newest first, keeping only the records [query] matches.
+     *
+     * Matches the remote user's name and the transcript, case-insensitively,
+     * anywhere in the field -- `LIKE '%q%'`, not full-text search. The reasoning
+     * is `docs/05_DataModel.md` section 27.1: a device that keeps seven days of
+     * conversation holds a few thousand rows, a scan of which is nothing, while
+     * FTS costs a second table, a migration and a tokenizer that handles
+     * Japanese badly. It also means every one of the five shipped scripts works
+     * the same way, because nothing is being tokenised.
+     *
+     * A blank [query] is the whole history, so the screen needs no separate
+     * "not searching" path.
+     */
+    fun observeMatching(
+        query: String,
+        limit: Int = DEFAULT_PAGE,
+    ): Flow<List<CommunicationRecord>>
+
     suspend fun byId(id: String): Outcome<CommunicationRecord?, HistoryError>
 
     suspend fun bySession(sessionId: String): Outcome<CommunicationRecord?, HistoryError>
@@ -48,10 +67,67 @@ interface HistoryRepository {
 
     suspend fun delete(id: String): Outcome<Unit, HistoryError>
 
+    /**
+     * Deletes several records in one transaction.
+     *
+     * @return how many rows went. Ids that were not there are not an error:
+     *   a selection is made from a list that may have changed underneath it.
+     */
+    suspend fun deleteAll(ids: Collection<String>): Outcome<Int, HistoryError>
+
+    /**
+     * Records older than [beforeMillis] that cleanup may remove.
+     *
+     * Favourites are never returned: `docs/05_DataModel.md` section 25 exempts
+     * them from automatic cleanup, and doing that here rather than in the
+     * caller means no caller can forget.
+     */
+    suspend fun expiredBefore(
+        beforeMillis: Long,
+        limit: Int = CLEANUP_BATCH,
+    ): Outcome<List<CommunicationRecord>, HistoryError>
+
+    /**
+     * Every audio path the database currently points at.
+     *
+     * The other half of the orphan scan (`docs/05_DataModel.md` section 31):
+     * a file on disk that is not in this set is referenced by nothing. Returned
+     * as a set rather than streamed because the answer has to be a single
+     * snapshot -- a path that appears halfway through the walk must not look
+     * missing to the beginning of it.
+     */
+    suspend fun audioPaths(): Outcome<Set<String>, HistoryError>
+
+    /**
+     * Favourited records, newest first, up to [limit].
+     *
+     * Exists because favourites are invisible to [expiredBefore] by design, so
+     * "delete everything, favourites included" has no other way to reach them.
+     */
+    suspend fun favorites(
+        limit: Int = CLEANUP_BATCH,
+    ): Outcome<List<CommunicationRecord>, HistoryError>
+
+    /** How many records there are, and how many of them are favourites. */
+    suspend fun counts(): Outcome<HistoryCounts, HistoryError>
+
     companion object {
         const val DEFAULT_PAGE: Int = 200
+
+        /**
+         * How many expired records one cleanup pass takes.
+         *
+         * Cleanup loops until a pass comes back short, so this is a bound on
+         * how much it holds at once, not on how much it removes. A device that
+         * has been off for a month still ends up clean, without reading a
+         * month of rows into memory to do it.
+         */
+        const val CLEANUP_BATCH: Int = 200
     }
 }
+
+/** What the history settings screen shows before offering to clean up. */
+data class HistoryCounts(val total: Int, val favorites: Int)
 
 /** Why a history operation did not happen. */
 sealed interface HistoryError {

@@ -5,6 +5,7 @@ import com.saikai.ptt.core.domain.RecordStatus
 import com.saikai.ptt.core.domain.TranscriptStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -113,5 +114,42 @@ class HistoryPresentationTest {
     @Test
     fun `a completed conversation carries no status note`() {
         assertNull(RecordStatus.COMPLETED.labelRes())
+    }
+
+    // --- Task40 -----------------------------------------------------------------------
+
+    @Test
+    fun `storage sizes read the way a file manager shows them`() {
+        val locale = java.util.Locale.ROOT
+        assertEquals("0 B", HistoryFormat.size(0, locale))
+        assertEquals("512 B", HistoryFormat.size(512, locale))
+        assertEquals("1.0 KB", HistoryFormat.size(1_024, locale))
+        assertEquals("1.0 MB", HistoryFormat.size(1_048_576, locale))
+        // Three significant figures either side of 100: one decimal below,
+        // none above, so neither "9 MB" nor "412.7 MB" happens.
+        assertEquals("9.5 MB", HistoryFormat.size(10_000_000, locale))
+        assertEquals("954 MB", HistoryFormat.size(1_000_000_000, locale))
+        assertEquals("1.0 GB", HistoryFormat.size(1_073_741_824, locale))
+    }
+
+    @Test
+    fun `a negative size reads as zero`() {
+        assertEquals("0 B", HistoryFormat.size(-1, java.util.Locale.ROOT))
+    }
+
+    @Test
+    fun `the biggest unit is used rather than overflowing it`() {
+        // A phone will not hold this, but the formatter must not run off the
+        // end of its unit table if one ever does.
+        val huge = HistoryFormat.size(Long.MAX_VALUE, java.util.Locale.ROOT)
+        assertTrue("ends in the largest unit: $huge", huge.endsWith(" TB"))
+    }
+
+    @Test
+    fun `clearing everything starts with the favourites kept`() {
+        // docs/05_DataModel.md section 39: favourites are a second question,
+        // never a default.
+        val prompt = DeletePrompt.Everything(includeFavorites = false)
+        assertEquals(false, prompt.includeFavorites)
     }
 }

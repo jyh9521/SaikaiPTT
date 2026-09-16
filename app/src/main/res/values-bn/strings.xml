@@ -157,4 +157,36 @@
     <string name="history_transcript_retry_later">পুনরায় শনাক্তকরণ পরবর্তী সংস্করণে যুক্ত হবে।</string>
     <string name="home_history_unread">ইতিহাস (%1$d)</string>
 
+
+    <!-- History management: search, selection, deletion, retention (Task40). -->
+    <string name="action_clear">মুছুন</string>
+    <string name="action_delete">ডিলিট</string>
+    <string name="history_manage">ব্যবস্থাপনা</string>
+    <string name="history_search_label">খুঁজুন</string>
+    <string name="history_search_hint">নাম বা সাবটাইটেল</string>
+    <string name="history_no_matches">কোনো রেকর্ড মেলেনি।</string>
+    <string name="history_selected_count">%1$d টি নির্বাচিত</string>
+    <string name="history_delete_title">মুছে ফেলবেন?</string>
+    <string name="history_delete_message">%1$d টি রেকর্ড ও তাদের রেকর্ডিং মুছে ফেলা হবে। এটি ফেরানো যাবে না।</string>
+    <string name="history_delete_favorites_warning">এর মধ্যে %1$d টি প্রিয়।</string>
+    <string name="history_storage_title">সঞ্চয়স্থান</string>
+    <string name="history_storage_measuring">হিসাব করা হচ্ছে…</string>
+    <string name="history_storage_summary">%1$d টি রেকর্ড · %2$s</string>
+    <string name="history_storage_favorites">এর মধ্যে %1$d টি প্রিয় (স্বয়ংক্রিয়ভাবে মুছে ফেলা হয় না)</string>
+    <string name="history_retention_title">সংরক্ষণকাল</string>
+    <string name="history_retention_note">সময়কাল বদলালে এখনই কিছু মুছবে না। পরের স্বয়ংক্রিয় পরিচ্ছন্নতায়, বা নিচের বোতামে কার্যকর হবে।</string>
+    <string name="retention_1_day">১ দিন</string>
+    <string name="retention_3_days">৩ দিন</string>
+    <string name="retention_7_days">৭ দিন</string>
+    <string name="retention_30_days">৩০ দিন</string>
+    <string name="retention_forever">চিরকাল</string>
+    <string name="history_cleanup_now">এখনই পরিষ্কার করুন</string>
+    <string name="history_cleanup_running">পরিষ্কার করা হচ্ছে…</string>
+    <string name="history_cleanup_note">সংরক্ষণকাল পেরোনো রেকর্ড এবং কোনো রেকর্ড যেগুলিকে নির্দেশ করে না সেই রেকর্ডিং মুছে ফেলা হয়। প্রিয়গুলিতে হাত দেওয়া হয় না।</string>
+    <string name="history_clear_all">সব ইতিহাস মুছুন</string>
+    <string name="history_clear_all_title">সব ইতিহাস মুছবেন?</string>
+    <string name="history_clear_all_message">প্রতিটি রেকর্ড ও রেকর্ডিং মুছে ফেলা হবে। এটি ফেরানো যাবে না।</string>
+    <string name="history_clear_favorites_too">প্রিয়গুলিও মুছুন</string>
+    <string name="history_clear_keeps_favorites">প্রিয়গুলি রাখা হবে।</string>
+
 </resources>

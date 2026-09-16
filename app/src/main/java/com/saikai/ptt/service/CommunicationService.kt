@@ -208,6 +208,11 @@ class CommunicationService : Service() {
                 // The talk button is reachable from the UI only while a service
                 // is actually running behind it.
                 app.ptt.attach(serviceContainer.ptt)
+
+                // Retention and orphan cleanup, once now and every few hours
+                // after. Last, and deliberately not a lifecycle step: a device
+                // whose disk will not answer must still be able to receive.
+                app.historyMaintenance.start(scope)
             }
             is Outcome.Failure -> {
                 // Everything the sequence started has already been released.
@@ -222,6 +227,9 @@ class CommunicationService : Service() {
 
     private suspend fun shutdown(): Unit = mutex.withLock {
         (application as? SaikaiApplication)?.container?.ptt?.detach()
+        // First: a cleanup pass starting while the recorder is being torn down
+        // would see a temporary file whose claim is about to be released.
+        appContainerOrNull()?.historyMaintenance?.stop()
         peerMirror?.cancel()
         peerMirror = null
         outcomeMirror?.cancel()

@@ -4,6 +4,9 @@ import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.DeviceIdentityProvider
 import com.saikai.ptt.core.common.subsystemScope
 import com.saikai.ptt.core.domain.HistoryRepository
+import com.saikai.ptt.core.history.ActiveRecordings
+import com.saikai.ptt.core.history.HistoryCleaner
+import com.saikai.ptt.core.history.HistoryEraser
 import com.saikai.ptt.core.domain.LocalUserRepository
 import com.saikai.ptt.core.domain.SettingsLocalUserRepository
 import com.saikai.ptt.core.domain.SettingsRepository
@@ -13,6 +16,8 @@ import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.locale.LocaleController
 import com.saikai.ptt.AppVisibility
 import com.saikai.ptt.audio.RecordingPlayback
+import com.saikai.ptt.storage.history.HistoryMaintenance
+import com.saikai.ptt.storage.history.LocalRecordingFiles
 import com.saikai.ptt.permissions.PermissionInspector
 import com.saikai.ptt.logging.AndroidLogSink
 import com.saikai.ptt.service.PttGateway
@@ -39,6 +44,12 @@ import com.saikai.ptt.usecase.ObserveHistory
 import com.saikai.ptt.usecase.ObserveUnreadCount
 import com.saikai.ptt.usecase.ReadRecord
 import com.saikai.ptt.usecase.SetRecordFavorite
+import com.saikai.ptt.usecase.ClearHistory
+import com.saikai.ptt.usecase.DeleteRecords
+import com.saikai.ptt.usecase.ObserveRetention
+import com.saikai.ptt.usecase.ReadHistoryUsage
+import com.saikai.ptt.usecase.RunCleanup
+import com.saikai.ptt.usecase.SetRetention
 import com.saikai.ptt.usecase.CompleteFirstLaunch
 import com.saikai.ptt.usecase.CompleteGuidance
 import com.saikai.ptt.usecase.ObserveFirstRun
@@ -257,7 +268,18 @@ class AppContainer(
             readRecord = ReadRecord(history),
             markRead = MarkRecordRead(history),
             setFavorite = SetRecordFavorite(history),
+            deleteRecords = DeleteRecords(historyEraser, history),
+            clearHistory = ClearHistory(historyEraser),
+            readUsage = ReadHistoryUsage(history, recordingFiles),
+            runCleanup = RunCleanup(historyMaintenance),
+            observeRetention = ObserveRetention(settingsRepository),
+            setRetention = SetRetention(settingsRepository),
         )
+    }
+
+    /** Deleting because the user asked, as opposed to because time passed. */
+    val historyEraser: HistoryEraser by lazy {
+        HistoryEraser(history = history, files = recordingFiles, logger = logger)
     }
 
     /**
@@ -284,8 +306,61 @@ class AppContainer(
             ?: error("This container was built without a files directory")
         RecordingPlayback(
             filesDir = factory(),
+            active = activeRecordings,
             logger = logger,
             scope = subsystemScope("playback", logger, Dispatchers.Main.immediate),
+        )
+    }
+
+    /**
+     * Which recordings something is holding open.
+     *
+     * Application scope and shared by three components that never meet: the
+     * recorder claims what it is writing, the player claims what it is
+     * sounding, and cleanup refuses to delete either
+     * (`docs/05_DataModel.md` sections 31 and 32). A registry rather than a
+     * question each of them could be asked, because cleanup runs on its own
+     * thread and neither of the others is necessarily alive when it does.
+     */
+    val activeRecordings: ActiveRecordings by lazy { ActiveRecordings() }
+
+    /** The recordings directory, as cleanup sees it. */
+    val recordingFiles: LocalRecordingFiles by lazy {
+        val factory = filesDirFactory
+            ?: error("This container was built without a files directory")
+        LocalRecordingFiles(factory(), logger)
+    }
+
+    /**
+     * Retention and orphan cleanup.
+     *
+     * Built here rather than in the service container because it is the
+     * settings screen's as much as the service's: the user can ask for a pass
+     * from "clean up now", and that must work whether or not the service
+     * happens to be running.
+     */
+    val historyCleaner: HistoryCleaner by lazy {
+        HistoryCleaner(
+            history = history,
+            files = recordingFiles,
+            active = activeRecordings,
+            logger = logger,
+        )
+    }
+
+    /**
+     * When cleanup runs: at service start-up and every few hours after.
+     *
+     * Application scope, like the cleaner it drives, so the settings screen's
+     * "clean up now" and the service's loop share one mutex and cannot run two
+     * passes over each other.
+     */
+    val historyMaintenance: HistoryMaintenance by lazy {
+        HistoryMaintenance(
+            cleaner = historyCleaner,
+            settings = settingsRepository,
+            config = config,
+            logger = logger,
         )
     }
 

@@ -48,6 +48,30 @@ interface CommunicationRecordDao {
     @Query("SELECT * FROM communication_record ORDER BY timestamp DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<CommunicationRecordEntity>>
 
+    /**
+     * The search `docs/05_DataModel.md` section 27.1 specifies: `LIKE`, over
+     * the remote name and the transcript.
+     *
+     * `:pattern` arrives already wrapped in `%`, built by the repository, so
+     * the user's own `%` and `_` can be escaped there -- a name containing an
+     * underscore must not match every name. `ESCAPE '\\'` is what makes that
+     * escaping mean anything to SQLite.
+     *
+     * SQLite's `LIKE` is case-insensitive for ASCII only. That is the whole of
+     * the effect for Japanese, Chinese, Burmese and Bengali, which have no
+     * case, and it is what an English speaker expects for the fifth language.
+     */
+    @Query(
+        """
+        SELECT * FROM communication_record
+        WHERE remoteUserName LIKE :pattern ESCAPE '\'
+           OR (transcript IS NOT NULL AND transcript LIKE :pattern ESCAPE '\')
+        ORDER BY timestamp DESC
+        LIMIT :limit
+        """
+    )
+    fun observeMatching(pattern: String, limit: Int): Flow<List<CommunicationRecordEntity>>
+
     @Query("SELECT * FROM communication_record WHERE id = :id")
     suspend fun byId(id: String): CommunicationRecordEntity?
 
@@ -75,6 +99,53 @@ interface CommunicationRecordDao {
     @Query("DELETE FROM communication_record WHERE id = :id")
     suspend fun deleteById(id: String): Int
 
+    /**
+     * Deletes a set of records.
+     *
+     * Chunked by the caller: SQLite's parameter limit is 999 on old versions,
+     * and a bulk delete of a whole history would otherwise fail at exactly the
+     * moment it matters.
+     */
+    @Query("DELETE FROM communication_record WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>): Int
+
+    /**
+     * What automatic cleanup may remove.
+     *
+     * `isFavorite = 0` is part of the query rather than a filter applied
+     * afterwards: `docs/05_DataModel.md` section 25 exempts favourites from
+     * cleanup at every retention setting, and a rule enforced in the query is
+     * one no caller can skip. Oldest first, so a batched sweep makes progress
+     * from the far end.
+     */
+    @Query(
+        """
+        SELECT * FROM communication_record
+        WHERE timestamp < :beforeMillis AND isFavorite = 0
+        ORDER BY timestamp ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun expiredBefore(beforeMillis: Long, limit: Int): List<CommunicationRecordEntity>
+
+    /** The favourites, which [expiredBefore] never returns. */
+    @Query(
+        """
+        SELECT * FROM communication_record
+        WHERE isFavorite = 1
+        ORDER BY timestamp DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun favorites(limit: Int): List<CommunicationRecordEntity>
+
+    /** Every path the database points at, for the orphan scan (section 31). */
+    @Query("SELECT audioPath FROM communication_record WHERE audioPath IS NOT NULL")
+    suspend fun audioPaths(): List<String>
+
     @Query("SELECT COUNT(*) FROM communication_record")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM communication_record WHERE isFavorite = 1")
+    suspend fun favoriteCount(): Int
 }

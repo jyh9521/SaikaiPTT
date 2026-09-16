@@ -31,6 +31,31 @@ internal object HistoryFormat {
      * which is correct for a quantity and wrong for a clock beside a progress
      * bar -- a stopwatch reads the same everywhere.
      */
+    /**
+     * `12.3 MB`, in the user's own numerals this time.
+     *
+     * Unlike [duration]: this is a quantity, not a clock, so a Bengali reader
+     * should see Bengali digits. Powers of 1024 with SI-looking suffixes, which
+     * is what every file manager on Android shows and therefore what the number
+     * will be compared against.
+     */
+    fun size(bytes: Long, locale: Locale): String {
+        val safe = bytes.coerceAtLeast(0)
+        if (safe < 1024) return String.format(locale, "%d B", safe)
+        var value = safe.toDouble()
+        var unit = 0
+        while (value >= 1024 && unit < SIZE_UNITS.lastIndex) {
+            value /= 1024
+            unit++
+        }
+        // One decimal below 100, none above: "9.7 MB" and "412 MB" are both
+        // three significant figures and neither is noise.
+        val pattern = if (value < 100) "%.1f %s" else "%.0f %s"
+        return String.format(locale, pattern, value, SIZE_UNITS[unit])
+    }
+
+    private val SIZE_UNITS = arrayOf("B", "KB", "MB", "GB", "TB")
+
     fun duration(millis: Long): String {
         val total = millis.coerceAtLeast(0)
         val minutes = TimeUnit.MILLISECONDS.toMinutes(total)

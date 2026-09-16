@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.saikai.ptt.R
 import com.saikai.ptt.audio.PlaybackError
 import com.saikai.ptt.core.domain.Direction
+import com.saikai.ptt.core.domain.HistoryRetention
 import com.saikai.ptt.core.domain.RecordStatus
 import com.saikai.ptt.core.domain.TranscriptStatus
 
@@ -53,6 +54,34 @@ data class HistoryDetail(
      */
     val fileAvailable: Boolean,
 )
+
+/**
+ * A deletion waiting for an answer.
+ *
+ * Modelled as state rather than left to the screen because what is about to be
+ * deleted has to be knowable by the thing that will delete it, and because
+ * `docs/05_DataModel.md` section 39 makes the favourites question part of the
+ * prompt rather than a checkbox somewhere else.
+ */
+sealed interface DeletePrompt {
+
+    /**
+     * These records, whatever they are.
+     *
+     * [favorites] is how many of them the user had starred, so the prompt can
+     * say so. Deleting a favourite by hand is allowed -- it is only automatic
+     * cleanup that must never touch one.
+     */
+    data class Selected(val ids: Set<String>, val favorites: Int) : DeletePrompt
+
+    /**
+     * The whole history.
+     *
+     * [includeFavorites] starts false and is the second question: section 39
+     * forbids clearing favourites without asking separately.
+     */
+    data class Everything(val includeFavorites: Boolean) : DeletePrompt
+}
 
 /**
  * Why the play button is off.
@@ -116,6 +145,15 @@ internal fun TranscriptStatus.statusLabelRes(): Int? = when (this) {
     TranscriptStatus.PROCESSING -> R.string.history_transcript_processing
     TranscriptStatus.COMPLETED -> null
     TranscriptStatus.FAILED -> R.string.history_transcript_failed
+}
+
+@StringRes
+internal fun HistoryRetention.labelRes(): Int = when (this) {
+    HistoryRetention.ONE_DAY -> R.string.retention_1_day
+    HistoryRetention.THREE_DAYS -> R.string.retention_3_days
+    HistoryRetention.SEVEN_DAYS -> R.string.retention_7_days
+    HistoryRetention.THIRTY_DAYS -> R.string.retention_30_days
+    HistoryRetention.FOREVER -> R.string.retention_forever
 }
 
 @StringRes

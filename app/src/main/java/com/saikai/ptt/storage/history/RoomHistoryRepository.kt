@@ -2,6 +2,7 @@ package com.saikai.ptt.storage.history
 
 import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.domain.CommunicationRecord
+import com.saikai.ptt.core.domain.HistoryCounts
 import com.saikai.ptt.core.domain.HistoryError
 import com.saikai.ptt.core.domain.HistoryRepository
 import com.saikai.ptt.core.logger.LogCategory
@@ -68,6 +69,21 @@ class RoomHistoryRepository(
             }
             .flowOn(io)
 
+    override fun observeMatching(
+        query: String,
+        limit: Int,
+    ): Flow<List<CommunicationRecord>> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return observeRecent(limit)
+        return dao.observeMatching(likePattern(trimmed), limit)
+            .map { rows -> rows.map { it.toDomain() } }
+            .catch { error ->
+                logger.e(LogCategory.STORAGE, error) { "could not search the history" }
+                emit(emptyList())
+            }
+            .flowOn(io)
+    }
+
     override suspend fun byId(id: String): Outcome<CommunicationRecord?, HistoryError> =
         guard("byId") { dao.byId(id)?.toDomain() }
 
@@ -96,6 +112,34 @@ class RoomHistoryRepository(
     override suspend fun delete(id: String): Outcome<Unit, HistoryError> =
         update(id) { dao.deleteById(id) }
 
+    override suspend fun deleteAll(ids: Collection<String>): Outcome<Int, HistoryError> =
+        guard("deleteAll") {
+            // Chunked because SQLite binds a limited number of parameters --
+            // 999 on the versions this app's minimum ships with -- and the call
+            // that would exceed it is "delete my whole history", which is
+            // exactly the one that must not fail.
+            ids.distinct().chunked(SQLITE_VARIABLES).sumOf { dao.deleteByIds(it) }
+        }
+
+    override suspend fun expiredBefore(
+        beforeMillis: Long,
+        limit: Int,
+    ): Outcome<List<CommunicationRecord>, HistoryError> =
+        guard("expiredBefore") {
+            dao.expiredBefore(beforeMillis, limit).map { it.toDomain() }
+        }
+
+    override suspend fun audioPaths(): Outcome<Set<String>, HistoryError> =
+        guard("audioPaths") { dao.audioPaths().toSet() }
+
+    override suspend fun favorites(
+        limit: Int,
+    ): Outcome<List<CommunicationRecord>, HistoryError> =
+        guard("favorites") { dao.favorites(limit).map { it.toDomain() } }
+
+    override suspend fun counts(): Outcome<HistoryCounts, HistoryError> =
+        guard("counts") { HistoryCounts(dao.count(), dao.favoriteCount()) }
+
     /** Turns "no rows touched" into [HistoryError.NotFound] rather than silent success. */
     private suspend fun update(
         id: String,
@@ -108,6 +152,23 @@ class RoomHistoryRepository(
                 if (outcome.value > 0) Outcome.success(Unit)
                 else Outcome.failure(HistoryError.NotFound(id))
         }
+    }
+
+    /**
+     * Wraps a search term for `LIKE`, escaping what `LIKE` would otherwise read
+     * as a wildcard.
+     *
+     * `%` and `_` are wildcards in SQL and ordinary characters to a user. A
+     * name with an underscore in it would otherwise match every name of the
+     * same length, and a transcript search for "100%" would match everything.
+     * The backslash is escaped first, or escaping the others would undo it.
+     */
+    private fun likePattern(query: String): String {
+        val escaped = query
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        return "%$escaped%"
     }
 
     private suspend fun <T> guard(
@@ -124,5 +185,16 @@ class RoomHistoryRepository(
             logger.e(LogCategory.STORAGE, error) { "history $operation failed" }
             Outcome.failure(HistoryError.Unavailable(error.javaClass.simpleName))
         }
+    }
+
+    private companion object {
+        /**
+         * How many ids go into one `IN (...)`.
+         *
+         * SQLite's `SQLITE_MAX_VARIABLE_NUMBER` is 999 before 3.32 and Android
+         * ships whichever version the device's platform has. 900 leaves room
+         * for the statement's own parameters and needs no version check.
+         */
+        const val SQLITE_VARIABLES = 900
     }
 }

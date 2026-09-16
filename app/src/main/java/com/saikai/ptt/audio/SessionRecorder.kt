@@ -11,6 +11,7 @@ import com.saikai.ptt.core.domain.DeviceId
 import com.saikai.ptt.core.domain.HistoryRepository
 import com.saikai.ptt.core.domain.RecordStatus
 import com.saikai.ptt.core.domain.StorageError
+import com.saikai.ptt.core.history.ActiveRecordings
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
 import com.saikai.ptt.core.logger.Logger
@@ -76,6 +77,7 @@ class SessionRecorder(
     private val localDeviceId: DeviceId,
     private val localUserId: () -> String?,
     private val history: HistoryRepository,
+    private val active: ActiveRecordings,
     private val onStorageError: (StorageError) -> Unit,
     private val logger: Logger,
     private val scope: CoroutineScope,
@@ -205,11 +207,19 @@ class SessionRecorder(
             null
         }
 
+        // Claimed for as long as this file exists under .tmp, so a cleanup
+        // pass during a long call cannot take it (`docs/05_DataModel.md`
+        // section 32). Released by whichever of complete() or onDiscard() ends
+        // this recording, and both always run: the writer thread's shutdown
+        // path completes whatever is open.
+        active.claim(temporary)
+
         open = OpenRecording(
             session = command.session,
             recordId = command.recordId,
             localUserId = command.localUserId,
             file = file,
+            temporaryPath = temporary,
             stream = writer?.first,
             writer = writer?.second,
         )
@@ -241,6 +251,7 @@ class SessionRecorder(
         if (current.session.sessionId != command.sessionId) return
         closeQuietly(current)
         current.file.delete()
+        active.release(current.temporaryPath)
         open = null
         logger.i(LogCategory.STORAGE) { "recording discarded; no history row" }
     }
@@ -258,6 +269,14 @@ class SessionRecorder(
         val frames = current.writer?.frameCount ?: 0L
         val finishedOk = closeQuietly(current) && !current.broken && frames > 0
         val finalPath = if (finishedOk) moveIntoPlace(current) else null
+
+        // The claim moves with the file, and only then is the temporary one
+        // given up: between the rename and the row being inserted the finished
+        // file is referenced by nothing, which is what an orphan looks like.
+        // The scan's one-hour grace period covers this window too; claiming it
+        // means the window does not depend on that.
+        finalPath?.let { active.claim(it) }
+        active.release(current.temporaryPath)
 
         if (finalPath == null) {
             current.file.delete()
@@ -320,6 +339,7 @@ class SessionRecorder(
             // cannot normally happen -- a device with no name cannot transmit,
             // and one that is receiving had a name when it announced itself.
             logger.w(LogCategory.STORAGE) { "no active user; not writing a history row" }
+            audioPath?.let { active.release(it) }
             return
         }
 
@@ -347,23 +367,32 @@ class SessionRecorder(
         )
 
         scope.launch {
-            when (val outcome = history.save(record)) {
-                is Outcome.Success ->
-                    logger.i(LogCategory.STORAGE) {
-                        "stored a ${record.durationMs}ms ${record.direction} record ($status)"
-                    }
+            try {
+                when (val outcome = history.save(record)) {
+                    is Outcome.Success ->
+                        logger.i(LogCategory.STORAGE) {
+                            "stored a ${record.durationMs}ms ${record.direction} record ($status)"
+                        }
 
-                is Outcome.Failure -> {
-                    // The audio stays. docs/05_DataModel.md section 34 calls
-                    // this an orphan candidate and leaves it for cleanup;
-                    // deleting a recording because a row would not insert
-                    // destroys the only copy of something somebody said.
-                    logger.e(LogCategory.STORAGE) {
-                        "history refused the record (${outcome.error}); " +
-                            "orphan candidate at ${audioPath ?: "no file"}"
+                    is Outcome.Failure -> {
+                        // The audio stays. docs/05_DataModel.md section 34 calls
+                        // this an orphan candidate and leaves it for cleanup;
+                        // deleting a recording because a row would not insert
+                        // destroys the only copy of something somebody said.
+                        logger.e(LogCategory.STORAGE) {
+                            "history refused the record (${outcome.error}); " +
+                                "orphan candidate at ${audioPath ?: "no file"}"
+                        }
+                        onStorageError(StorageError.HISTORY_UNAVAILABLE)
                     }
-                    onStorageError(StorageError.HISTORY_UNAVAILABLE)
                 }
+            } finally {
+                // Released whichever way the insert went, and in a finally
+                // because the service's scope can be cancelled mid-write. A
+                // claim that leaks is a file cleanup can never remove -- and on
+                // the failure path this is precisely the orphan candidate the
+                // next pass is meant to find.
+                audioPath?.let { active.release(it) }
             }
         }
     }
@@ -373,6 +402,8 @@ class SessionRecorder(
         val recordId: String,
         val localUserId: String?,
         val file: File,
+        /** The relative path this is claimed under until it is moved or dropped. */
+        val temporaryPath: String,
         val stream: BufferedOutputStream?,
         val writer: OggOpusWriter?,
     ) {

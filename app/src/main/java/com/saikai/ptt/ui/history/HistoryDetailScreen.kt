@@ -60,6 +60,7 @@ fun HistoryDetailScreen(
     onPause: () -> Unit,
     onStop: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onDelete: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -148,6 +149,14 @@ fun HistoryDetailScreen(
                             if (current.isFavorite) R.string.history_unfavorite
                             else R.string.history_favorite
                         )
+                    )
+                }
+                // Asks; the confirmation is the view model's
+                // (`docs/05_DataModel.md` section 38 requires one).
+                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -316,6 +325,7 @@ private fun HistoryDetailScreenPreview() {
             onPause = {},
             onStop = {},
             onToggleFavorite = {},
+            onDelete = {},
             onBack = {},
         )
     }

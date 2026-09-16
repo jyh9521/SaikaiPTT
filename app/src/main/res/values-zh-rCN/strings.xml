@@ -154,4 +154,36 @@
     <string name="history_transcript_retry_later">重新识别将在后续版本中提供。</string>
     <string name="home_history_unread">历史记录（%1$d）</string>
 
+
+    <!-- History management: search, selection, deletion, retention (Task40). -->
+    <string name="action_clear">清除</string>
+    <string name="action_delete">删除</string>
+    <string name="history_manage">管理</string>
+    <string name="history_search_label">搜索</string>
+    <string name="history_search_hint">用户名或字幕</string>
+    <string name="history_no_matches">没有匹配的记录。</string>
+    <string name="history_selected_count">已选择 %1$d 条</string>
+    <string name="history_delete_title">要删除吗？</string>
+    <string name="history_delete_message">将删除 %1$d 条记录及其录音，无法恢复。</string>
+    <string name="history_delete_favorites_warning">其中 %1$d 条是收藏。</string>
+    <string name="history_storage_title">存储占用</string>
+    <string name="history_storage_measuring">计算中…</string>
+    <string name="history_storage_summary">记录 %1$d 条・%2$s</string>
+    <string name="history_storage_favorites">其中 %1$d 条为收藏（不会被自动删除）</string>
+    <string name="history_retention_title">保留期</string>
+    <string name="history_retention_note">更改保留期不会立即删除。下一次自动整理，或点击下面的按钮时生效。</string>
+    <string name="retention_1_day">1 天</string>
+    <string name="retention_3_days">3 天</string>
+    <string name="retention_7_days">7 天</string>
+    <string name="retention_30_days">30 天</string>
+    <string name="retention_forever">永久</string>
+    <string name="history_cleanup_now">立即整理</string>
+    <string name="history_cleanup_running">整理中…</string>
+    <string name="history_cleanup_note">删除超过保留期的记录，以及没有任何记录引用的录音文件。收藏不在范围内。</string>
+    <string name="history_clear_all">删除全部历史</string>
+    <string name="history_clear_all_title">要删除全部历史吗？</string>
+    <string name="history_clear_all_message">将删除所有记录及其录音，无法恢复。</string>
+    <string name="history_clear_favorites_too">同时删除收藏</string>
+    <string name="history_clear_keeps_favorites">收藏将被保留。</string>
+
 </resources>
