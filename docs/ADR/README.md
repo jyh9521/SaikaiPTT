@@ -22,11 +22,16 @@
 | ADR-008 | 播放路由：改用 `USAGE_MEDIA` | Accepted | Task21, Task26 |
 | ADR-009 | 页面导航：手写状态，不引入 Navigation 库 | Accepted | Task33, Task35, Task36, Task37 |
 | ADR-010 | 导航加入返回栈（仍不引入 Navigation 库） | Accepted | Task35, Task36, Task37 |
-| ADR-011 | ASR 引擎复核：v1 不集成离线日语识别 | Accepted | Task41, Task44 |
+| ADR-011 | ASR 引擎复核（Vosk 不合格、sherpa-onnx 对齐已验证） | **部分被 ADR-012 取代** | Task41, Task44 |
+| ADR-012 | 重新引入 ASR：sherpa-onnx + 自行分发 int8 模型 | Accepted | Task45, Task46 |
 
 `ADR-008` 修订 `ADR-004 §3` 的两条（usage 与音量流），其余部分仍以 `ADR-004` 为准。
 
 `ADR-010` 修订 `ADR-009` 的「没有返回栈」一条，其余部分仍以 `ADR-009` 为准。
 
 `ADR-011` 取代 `ADR-006 §1`（引擎）与 `§2/§4`（「约 50 MB」的体积假设）。
-`ADR-006 §2` 的模型分发形态在将来重新引入 ASR 时仍然适用。
+
+`ADR-012` 推翻 `ADR-011` 的 Decision（v1 不集成），理由是后者的体积论证口径错了。
+`ADR-011` 对 Vosk 的判定与对 sherpa-onnx 对齐的验证仍然有效，`ADR-012` 直接引用。
+`ADR-006 §2` 的模型分发形态（不打进 APK、首次启用时下载、校验失败即删除重下）
+在 `ADR-012` 下重新生效。

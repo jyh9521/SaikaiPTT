@@ -39,9 +39,13 @@ Thumbs.db
 /reports/
 jacoco.exec
 
-# ASR models must never be committed (downloaded on demand, see ADR-006)
+# ASR models must never be committed (downloaded on demand, see ADR-012).
+# The repackaging in tools/package-asr-model.md produces a 153 MiB archive;
+# it belongs in a GitHub Release, never in git history.
 /models/
 *.zip
+*.tar.bz2
+*.onnx
 
 # Local secrets / signing
 keystore.properties
