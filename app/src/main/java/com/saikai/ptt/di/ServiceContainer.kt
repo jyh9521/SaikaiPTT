@@ -5,6 +5,7 @@ import com.saikai.ptt.audio.AndroidAudioFocus
 import com.saikai.ptt.audio.AndroidAudioPlayer
 import com.saikai.ptt.audio.AndroidAudioRecorder
 import com.saikai.ptt.audio.AndroidVoiceAudio
+import com.saikai.ptt.audio.SessionRecorder
 import com.saikai.ptt.audio.OpusVoiceCodec
 import com.saikai.ptt.core.common.LifecycleStep
 import com.saikai.ptt.core.domain.DeviceId
@@ -126,48 +127,6 @@ class ServiceContainer(
      * One object because they are one thing: VOICE_END has to carry the number
      * of frames that actually went out, and only whatever sent them knows it.
      */
-    val transmitter: VoiceTransmitter = VoiceTransmitter(
-        config = app.config,
-        logger = app.logger,
-        selfDeviceId = localDeviceId,
-        sink = UdpDatagramSink(app.config, app.logger, transport),
-        codecs = ::newCodec,
-    )
-
-    private val player = AndroidAudioPlayer(service, app.config, app.logger)
-
-    /**
-     * The receive pipeline: jitter buffer, decoder, speaker.
-     *
-     * Holds the player rather than being held by it, because everything between
-     * the network and the device -- ordering, gap filling, decoding -- happens
-     * before a byte reaches `AudioTrack`.
-     */
-    val receiver: VoiceReceiver = VoiceReceiver(
-        config = app.config,
-        logger = app.logger,
-        player = player,
-        codecs = ::newCodec,
-    )
-
-    /**
-     * The microphone, the speaker and the audio focus around both.
-     *
-     * Captured frames go straight to the transmitter: it is the sink, so there
-     * is no queue between the capture thread and the encoder and nothing to
-     * tune. The transmitter decides whether a frame is buffered or transmitted,
-     * because that is a property of the session, not of the microphone.
-     */
-    val audio: AndroidVoiceAudio = AndroidVoiceAudio(
-        recorder = AndroidAudioRecorder(service, app.config, app.logger),
-        player = player,
-        focus = AndroidAudioFocus(service, app.logger),
-        logger = app.logger,
-        frames = transmitter::onPcmFrame,
-        onFocusLost = { endSessionForAudioFocus() },
-        receiver = receiver,
-    )
-
     /**
      * The two settings the session machine consults, held in memory.
      *
@@ -190,6 +149,69 @@ class ServiceContainer(
 
     private val activeUser: StateFlow<LocalUser?> =
         app.localUsers.activeUser.stateIn(scope, SharingStarted.Eagerly, null)
+
+    /**
+     * Where both directions' audio is written down and filed.
+     *
+     * One recorder, not one per direction: PTT is half duplex, so at most one
+     * conversation is being recorded at any moment, and a single writer thread
+     * and queue is both simpler and the thing that guarantees it.
+     */
+    val recorder: SessionRecorder = SessionRecorder(
+        filesDir = service.filesDir,
+        config = app.config,
+        localDeviceId = localDeviceId,
+        localUserId = { activeUser.value?.id },
+        history = app.history,
+        onStorageError = app.serviceStatus::publishStorageError,
+        logger = app.logger,
+        scope = scope,
+    )
+
+    val transmitter: VoiceTransmitter = VoiceTransmitter(
+        config = app.config,
+        logger = app.logger,
+        selfDeviceId = localDeviceId,
+        sink = UdpDatagramSink(app.config, app.logger, transport),
+        codecs = ::newCodec,
+        recording = recorder,
+    )
+
+    private val player = AndroidAudioPlayer(service, app.config, app.logger)
+
+    /**
+     * The receive pipeline: jitter buffer, decoder, speaker.
+     *
+     * Holds the player rather than being held by it, because everything between
+     * the network and the device -- ordering, gap filling, decoding -- happens
+     * before a byte reaches `AudioTrack`.
+     */
+    val receiver: VoiceReceiver = VoiceReceiver(
+        config = app.config,
+        logger = app.logger,
+        player = player,
+        codecs = ::newCodec,
+        recording = recorder,
+    )
+
+    /**
+     * The microphone, the speaker and the audio focus around both.
+     *
+     * Captured frames go straight to the transmitter: it is the sink, so there
+     * is no queue between the capture thread and the encoder and nothing to
+     * tune. The transmitter decides whether a frame is buffered or transmitted,
+     * because that is a property of the session, not of the microphone.
+     */
+    val audio: AndroidVoiceAudio = AndroidVoiceAudio(
+        recorder = AndroidAudioRecorder(service, app.config, app.logger),
+        player = player,
+        focus = AndroidAudioFocus(service, app.logger),
+        logger = app.logger,
+        frames = transmitter::onPcmFrame,
+        onFocusLost = { endSessionForAudioFocus() },
+        receiver = receiver,
+    )
+
 
     /** The state machine. One per service, and the only arbiter of who is talking. */
     val sessions: SessionManager = SessionManager(
@@ -298,6 +320,10 @@ class ServiceContainer(
         discovery,
         presence,
         overlay,
+        // Before the coordinator, so it is released after it: the last thing a
+        // session does on the way down is finish its recording, and the writer
+        // thread has to still be there to take it.
+        recorder,
         coordinator,
     )
 

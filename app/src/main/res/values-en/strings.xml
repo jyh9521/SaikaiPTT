@@ -131,6 +131,7 @@
     <string name="ptt_message_unreachable">That device cannot be reached.</string>
     <string name="ptt_message_already_in_session">Already in a call.</string>
     <string name="ptt_message_interrupted">The call was interrupted.</string>
+    <string name="ptt_message_not_recorded">The call went through, but the recording could not be saved.</string>
 
 
     <string name="language_system">Follow the system</string>

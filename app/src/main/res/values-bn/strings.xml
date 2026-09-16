@@ -121,6 +121,7 @@
     <string name="ptt_message_unreachable">অপর প্রান্তে সংযোগ করা যাচ্ছে না।</string>
     <string name="ptt_message_already_in_session">আপনি ইতিমধ্যেই কথা বলছেন।</string>
     <string name="ptt_message_interrupted">কথা বলার মাঝেই সংযোগ কেটে গেছে।</string>
+    <string name="ptt_message_not_recorded">কথা বলা শেষ হয়েছে, কিন্তু রেকর্ডিং সংরক্ষণ করা যায়নি।</string>
     <string name="notification_channel_communication">যোগাযোগ</string>
     <string name="notification_channel_communication_description">গ্রহণ চালু রাখতে দেখানো বিজ্ঞপ্তি</string>
     <string name="notification_service_title">SaikaiPTT</string>

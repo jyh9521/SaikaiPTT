@@ -201,6 +201,7 @@ core       纯 Kotlin/JVM，业务与领域逻辑
 
 ```text
 core/
+  audio/         音频文件格式（Ogg/Opus 封装、录音路径）
   common/        工具、Result、错误模型
   config/        集中配置
   logger/        日志抽象
@@ -250,6 +251,7 @@ app  ──────────────► core
  └─ di        ─► 以上全部（唯一允许知晓所有实现的地方）
 
 core.session   ─► core.protocol, core.domain, core.config
+core.audio     ─► core.domain（AudioFormat）
 core.protocol  ─► core.common, core.config, core.domain, core.logger
 core.domain    ─► core.common, core.config, core.logger
 core.logger    ─► core.common, core.config

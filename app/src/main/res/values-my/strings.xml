@@ -122,6 +122,7 @@
     <string name="ptt_message_unreachable">တစ်ဖက်နှင့် မဆက်သွယ်နိုင်ပါ။</string>
     <string name="ptt_message_already_in_session">စကားပြောနေပြီး ဖြစ်သည်။</string>
     <string name="ptt_message_interrupted">စကားပြောမှု ဖြတ်တောက်ခံရသည်။</string>
+    <string name="ptt_message_not_recorded">စကားပြောမှု အောင်မြင်ခဲ့သော်လည်း အသံဖမ်းချက်ကို သိမ်း၍ မရပါ။</string>
     <string name="notification_channel_communication">ဆက်သွယ်ရေး</string>
     <string name="notification_channel_communication_description">ဆက်လက် လက်ခံနိုင်ရန် ပြသသော အကြောင်းကြားချက်</string>
     <string name="notification_service_title">SaikaiPTT</string>

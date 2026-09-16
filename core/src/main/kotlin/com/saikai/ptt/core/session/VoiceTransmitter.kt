@@ -91,14 +91,17 @@ class VoiceTransmitter(
         target: DeviceId,
         endpoint: PeerEndpoint,
         localName: String,
+        peerName: String,
     ): Boolean {
         val session = synchronized(lock) {
             val current = outgoing
             when {
                 current != null && current.sessionId == sessionId -> current
                 else -> {
-                    if (current != null) close(current)
-                    open(sessionId, target, endpoint) ?: return false
+                    // Displaced rather than ended: whatever was open never
+                    // reached its VOICE_END, so its recording is interrupted.
+                    if (current != null) close(current, interrupted = true)
+                    open(sessionId, target, endpoint, peerName) ?: return false
                 }
             }
         }
@@ -167,7 +170,9 @@ class VoiceTransmitter(
                     ""
                 }
         }
-        synchronized(lock) { if (outgoing === session) close(session) }
+        // The one path that is not an interruption: VOICE_END went out because
+        // the user let go.
+        synchronized(lock) { if (outgoing === session) close(session, interrupted = false) }
         return sent
     }
 
@@ -214,10 +219,6 @@ class VoiceTransmitter(
                 return
             }
 
-            // Before the codec: the recording is of what was said, not of what
-            // the network accepted.
-            recording.frame(pcm, offset, length, capturedAtMillis)
-
             PcmConversion.bytesToShorts(pcm, offset, length, session.samples, 0)
             val encoded = session.codec.encode(session.samples, session.encoded)
             if (encoded <= 0) {
@@ -226,6 +227,11 @@ class VoiceTransmitter(
                 }
                 return
             }
+
+            // After the codec and before the send-or-buffer decision: ADR-004
+            // section 6 forbids re-encoding, and the recording is still of what
+            // was *said* -- pre-roll frames the peer may never accept included.
+            recording.frame(session.encoded, 0, encoded, capturedAtMillis)
 
             if (session.live) {
                 transmit(session, encoded, capturedAtMillis)
@@ -259,8 +265,10 @@ class VoiceTransmitter(
 
                 // Anything else means this stream is over. voiceEnd has
                 // already closed it on the normal path, so reaching here with
-                // it still open means the transmission did not finish.
-                else -> close(session)
+                // it still open means the transmission did not finish -- which
+                // is exactly what INTERRUPTED means in the history record
+                // (`docs/05_DataModel.md` section 26).
+                else -> close(session, interrupted = true)
             }
         }
     }
@@ -305,6 +313,7 @@ class VoiceTransmitter(
         sessionId: SessionId,
         target: DeviceId,
         endpoint: PeerEndpoint,
+        peerName: String,
     ): Outgoing? {
         val codec = codecs()
         if (codec == null) {
@@ -325,7 +334,15 @@ class VoiceTransmitter(
             encoded = ByteArray(codec.maxEncodedBytes),
         )
         outgoing = session
-        recording.begin(sessionId)
+        recording.begin(
+            RecordingSession(
+                sessionId = sessionId,
+                peer = target,
+                peerName = peerName,
+                outgoing = true,
+                startedAtMillis = nowMillis(),
+            )
+        )
         return session
     }
 
@@ -348,9 +365,9 @@ class VoiceTransmitter(
      *
      * Caller holds the lock.
      */
-    private fun close(session: Outgoing) {
+    private fun close(session: Outgoing, interrupted: Boolean) {
         if (session.packetizer.framesSent > 0) {
-            recording.finish(session.sessionId)
+            recording.finish(session.sessionId, interrupted)
         } else {
             recording.discard(session.sessionId)
         }

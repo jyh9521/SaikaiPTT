@@ -3,6 +3,7 @@ package com.saikai.ptt.core.session
 import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.AudioPlayer
 import com.saikai.ptt.core.domain.PcmConversion
+import com.saikai.ptt.core.domain.DeviceId
 import com.saikai.ptt.core.domain.VoiceCodec
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
@@ -54,6 +55,15 @@ class VoiceReceiver(
     private val logger: Logger,
     private val player: AudioPlayer,
     private val codecs: () -> VoiceCodec?,
+    /**
+     * Where what was heard is written down.
+     *
+     * Fed from the jitter buffer's playout callback rather than from arrival,
+     * so the file holds frames in the order they were played, once each --
+     * which is the same guarantee the decoder gets, and the reason recording
+     * happens there rather than in [onFrame].
+     */
+    private val recording: VoiceRecording = NoVoiceRecording,
 ) {
 
     private val lock = Any()
@@ -88,7 +98,12 @@ class VoiceReceiver(
      *   the same as a speaker that will not open: refuse the session rather
      *   than accept one that can produce no sound.
      */
-    fun open(sessionId: SessionId): Boolean = synchronized(lock) {
+    fun open(
+        sessionId: SessionId,
+        peer: DeviceId,
+        peerName: String,
+        startedAtMillis: Long,
+    ): Boolean = synchronized(lock) {
         session?.let { close(it) }
         val codec = codecs()
         if (codec == null) {
@@ -96,6 +111,15 @@ class VoiceReceiver(
             return false
         }
         session = Open(sessionId, codec)
+        recording.begin(
+            RecordingSession(
+                sessionId = sessionId,
+                peer = peer,
+                peerName = peerName,
+                outgoing = false,
+                startedAtMillis = startedAtMillis,
+            )
+        )
         true
     }
 
@@ -128,6 +152,9 @@ class VoiceReceiver(
             val current = session ?: return
             if (current.sessionId != sessionId) return
             current.buffer.flush(finalDataSequence)
+            // VOICE_END arrived, so whatever happens next is a normal end
+            // rather than an interruption.
+            current.endedCleanly = true
             report(current, frameCount)
         }
 
@@ -143,6 +170,14 @@ class VoiceReceiver(
         // frame count to compare against, so the loss percentage is left out
         // rather than invented.
         if (lastReception?.sessionId != current.sessionId) report(current, expected = 0)
+        // Anything that was played is worth keeping, however it ended. Nothing
+        // played means nothing was heard, and section 10.4 wants no record at
+        // all for that.
+        if (current.buffer.played > 0) {
+            recording.finish(current.sessionId, interrupted = !current.endedCleanly)
+        } else {
+            recording.discard(current.sessionId)
+        }
         current.codec.release()
         if (session === current) session = null
     }
@@ -169,12 +204,20 @@ class VoiceReceiver(
         val codec: VoiceCodec,
     ) : JitterBufferSink {
 
+        /** True once VOICE_END has been seen, so [close] can tell the two apart. */
+        var endedCleanly: Boolean = false
+
         private val samples = ShortArray(config.audio.frameSizeSamples)
         private val pcm = ByteArray(config.audio.frameSizeBytes)
 
         val buffer = JitterBuffer(config, logger, this)
 
         override fun onFrame(frame: ByteArray, offset: Int, length: Int) {
+            // ADR-004 section 6: what arrived is what is written, never
+            // decoded and re-encoded. A frame that will not decode is still a
+            // frame the sender produced, so it is recorded either way.
+            recording.frame(frame, offset, length, System.currentTimeMillis())
+
             val produced = codec.decode(frame, offset, length, samples)
             if (produced > 0) {
                 play(produced)

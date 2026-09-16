@@ -11,6 +11,7 @@ import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.LogLevel
 import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
+import com.saikai.ptt.core.domain.DeviceId
 import com.saikai.ptt.core.protocol.SessionId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,6 +56,9 @@ class VoiceReceiverTest {
         codecs = { codecsCreated++; codec },
     )
 
+    /** The far end. Only carried into the recording, never used for routing here. */
+    private val peerDevice = DeviceId.random()
+
     private fun offer(sequence: Int, sessionId: SessionId = session) {
         val frame = ByteArray(40) { sequence.toByte() }
         subject.onFrame(sessionId, sequence, frame, 0, frame.size)
@@ -62,7 +66,7 @@ class VoiceReceiverTest {
 
     @Test
     fun `frames are decoded and played once the buffer releases them`() {
-        assertTrue(subject.open(session))
+        assertTrue(subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L))
         offer(1)
         offer(2)
         offer(3)
@@ -74,7 +78,7 @@ class VoiceReceiverTest {
 
     @Test
     fun `a lost frame is recovered from the copy in the next packet`() {
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1)
         offer(2)
         offer(3)
@@ -90,7 +94,7 @@ class VoiceReceiverTest {
 
     @Test
     fun `with no next packet the codec conceals`() {
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1)
         offer(3)
         player.clear()
@@ -101,7 +105,7 @@ class VoiceReceiverTest {
         player.clear()
 
         subject.close()
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(2)
         subject.flush(session, finalDataSequence = 2, frameCount = 2)
 
@@ -112,7 +116,7 @@ class VoiceReceiverTest {
 
     @Test
     fun `concealment is used when even the follower is gone`() {
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1)
         offer(2)
         offer(3)
@@ -129,7 +133,7 @@ class VoiceReceiverTest {
     @Test
     fun `silence is the last resort`() {
         codec.canConceal = false
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1)
         offer(2)
         offer(3)
@@ -145,7 +149,7 @@ class VoiceReceiverTest {
     fun `a frame that will not decode becomes a gap, not a hole`() {
         // Dropping it would shorten the audio by 20 ms with nothing to show for
         // it, and desynchronise nothing that anyone could hear.
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1)
         offer(2)
         codec.failDecodeOf = 3
@@ -159,7 +163,7 @@ class VoiceReceiverTest {
         offer(1)
         assertEquals(1L, subject.strayFrames)
 
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1, sessionId = other)
 
         assertEquals(2L, subject.strayFrames)
@@ -168,11 +172,11 @@ class VoiceReceiverTest {
 
     @Test
     fun `each transmission gets its own decoder, and gives it back`() {
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         val first = codec
         codec = MarkerCodec()
 
-        subject.open(other)
+        subject.open(other, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
 
         assertEquals(2, codecsCreated)
         assertTrue("the previous decoder was leaked", first.released)
@@ -184,7 +188,7 @@ class VoiceReceiverTest {
 
     @Test
     fun `the transmission is reported once it is over`() {
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1)
         offer(2)
         offer(4)
@@ -205,7 +209,7 @@ class VoiceReceiverTest {
     fun `a session cut short is still reported, without a loss percentage`() {
         // No VOICE_END means no frame count to compare against, so the
         // percentage is left out rather than invented.
-        subject.open(session)
+        subject.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L)
         offer(1)
         offer(2)
         offer(3)
@@ -221,7 +225,7 @@ class VoiceReceiverTest {
     fun `a session with no decoder is refused rather than accepted silently`() {
         val refusing = VoiceReceiver(config, logger, player, codecs = { null })
 
-        assertFalse(refusing.open(session))
+        assertFalse(refusing.open(session, peer = peerDevice, peerName = "山田", startedAtMillis = 0L))
         assertFalse(refusing.isOpen)
     }
 

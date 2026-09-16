@@ -144,6 +144,11 @@ class HomeViewModel(private val useCases: HomeUseCases) : ViewModel() {
         viewModelScope.launch {
             useCases.observeOutcomes().collect { outcome -> message.value = outcome.toMessage() }
         }
+        // A storage failure is reported after the conversation it concerns, so
+        // it can only ever overwrite a message about a call that has ended.
+        viewModelScope.launch {
+            useCases.observeStorageErrors().collect { message.value = PttMessage.NOT_RECORDED }
+        }
     }
 
     // --- Actions --------------------------------------------------------------------

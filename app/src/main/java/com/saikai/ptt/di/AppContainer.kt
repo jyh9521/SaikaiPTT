@@ -18,6 +18,7 @@ import com.saikai.ptt.service.ServiceStatus
 import com.saikai.ptt.usecase.HomeUseCases
 import com.saikai.ptt.usecase.ObserveActiveUser
 import com.saikai.ptt.usecase.ObserveOutcomes
+import com.saikai.ptt.usecase.ObserveStorageErrors
 import com.saikai.ptt.usecase.ObservePeers
 import com.saikai.ptt.usecase.ObserveServiceState
 import com.saikai.ptt.usecase.ObserveSession
@@ -187,6 +188,7 @@ class AppContainer(
             observeServiceState = ObserveServiceState(serviceStatus),
             observeSession = ObserveSession(serviceStatus),
             observeOutcomes = ObserveOutcomes(serviceStatus),
+            observeStorageErrors = ObserveStorageErrors(serviceStatus),
             observeActiveUser = ObserveActiveUser(localUsers),
             startPtt = StartPtt(ptt),
             stopPtt = StopPtt(ptt),

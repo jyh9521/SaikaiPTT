@@ -118,6 +118,7 @@
     <string name="ptt_message_unreachable">无法连接到对方。</string>
     <string name="ptt_message_already_in_session">已经在通话中。</string>
     <string name="ptt_message_interrupted">通话被中断了。</string>
+    <string name="ptt_message_not_recorded">通话正常结束，但录音没能保存。</string>
     <string name="notification_channel_communication">通信</string>
     <string name="notification_channel_communication_description">为了持续接收而显示的通知</string>
     <string name="notification_service_title">西海PTT</string>

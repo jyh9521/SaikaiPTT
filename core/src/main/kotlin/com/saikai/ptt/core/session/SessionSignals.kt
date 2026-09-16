@@ -28,6 +28,15 @@ interface SessionSignals {
         target: DeviceId,
         endpoint: PeerEndpoint,
         localName: String,
+        /**
+         * What the peer is called, for the recording this starts.
+         *
+         * Not put on the wire -- only [localName] is (ADR-003 section 4). It is
+         * here because the history record stores a snapshot of the peer's name
+         * as it was at the time (`docs/05_DataModel.md` section 16), and by the
+         * time the transmission ends the peer table may have moved on.
+         */
+        peerName: String,
     ): Boolean
 
     suspend fun voiceAccept(

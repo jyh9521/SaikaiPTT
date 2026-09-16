@@ -142,4 +142,13 @@ enum class PttMessage {
     UNREACHABLE,
     ALREADY_IN_SESSION,
     INTERRUPTED,
+
+    /**
+     * The conversation happened; storing it did not.
+     *
+     * Reported after the fact, never during: `docs/02_Architecture.md`
+     * section 18 makes a full disk cost a recording and never a call, so by the
+     * time this is shown the audio has already been sent or played.
+     */
+    NOT_RECORDED,
 }

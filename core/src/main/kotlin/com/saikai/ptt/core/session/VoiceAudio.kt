@@ -1,6 +1,5 @@
 package com.saikai.ptt.core.session
 
-import com.saikai.ptt.core.protocol.SessionId
 
 /**
  * What the session machine needs from the audio devices, and nothing more.
@@ -32,12 +31,18 @@ interface VoiceAudio {
     /**
      * Opens the speaker for an incoming session.
      *
+     * Takes the whole [RecordingSession] rather than an id because opening the
+     * speaker is also where the recording of what is about to be heard begins,
+     * and by the time it ends the peer's name may have changed
+     * (`docs/05_DataModel.md` section 16). The audio layer itself only forwards
+     * it.
+     *
      * @return false when it cannot be opened -- most often because a phone call
      *   holds the audio focus. The session is then refused rather than accepted,
      *   because accepting it would mean playing nothing while telling the
      *   speaker they were heard.
      */
-    suspend fun startPlayback(sessionId: SessionId): Boolean
+    suspend fun startPlayback(session: RecordingSession): Boolean
 
     /**
      * Closes the speaker.
@@ -63,6 +68,6 @@ interface VoiceAudio {
 object NoVoiceAudio : VoiceAudio {
     override suspend fun startCapture(): Boolean = true
     override suspend fun stopCapture() = Unit
-    override suspend fun startPlayback(sessionId: SessionId): Boolean = true
+    override suspend fun startPlayback(session: RecordingSession): Boolean = true
     override suspend fun stopPlayback(drain: Boolean) = Unit
 }

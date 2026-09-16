@@ -32,6 +32,7 @@ internal class RecordingSignals(private val sendSucceeds: () -> Boolean = { true
         target: DeviceId,
         endpoint: PeerEndpoint,
         localName: String,
+        peerName: String,
     ): Boolean = record("VOICE_START $sessionId -> $target as $localName")
 
     override suspend fun voiceAccept(
@@ -83,9 +84,14 @@ internal class FakeAudio(
         capturing = false
     }
 
-    override suspend fun startPlayback(sessionId: SessionId): Boolean {
+    /** The conversation the last accepted playback belongs to, for assertions. */
+    var playbackSession: RecordingSession? = null
+        private set
+
+    override suspend fun startPlayback(session: RecordingSession): Boolean {
         if (!speakerAvailable) return false
         playing = true
+        playbackSession = session
         return true
     }
 

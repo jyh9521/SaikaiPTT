@@ -618,6 +618,7 @@ private fun PttMessage.labelRes(): Int = when (this) {
     PttMessage.UNREACHABLE -> R.string.ptt_message_unreachable
     PttMessage.ALREADY_IN_SESSION -> R.string.ptt_message_already_in_session
     PttMessage.INTERRUPTED -> R.string.ptt_message_interrupted
+    PttMessage.NOT_RECORDED -> R.string.ptt_message_not_recorded
 }
 
 // --- Preview --------------------------------------------------------------------------

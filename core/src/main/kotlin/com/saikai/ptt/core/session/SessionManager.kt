@@ -125,7 +125,7 @@ class SessionManager(
                 )
             )
 
-            if (!signals.voiceStart(sessionId, peer.deviceId, peer.endpoint, name)) {
+            if (!signals.voiceStart(sessionId, peer.deviceId, peer.endpoint, name, peer.userName)) {
                 audio.stopCapture()
                 enter(SessionState.Idle)
                 return Outcome.failure(SendFailure.UNREACHABLE)
@@ -373,7 +373,15 @@ class SessionManager(
         endpoint: PeerEndpoint,
     ) {
         val now = nowMillis()
-        if (!audio.startPlayback(sessionId)) {
+        val recorded = RecordingSession(
+            sessionId = sessionId,
+            peer = sender,
+            // The name as it was when they pressed the button (section 16).
+            peerName = payload.userName,
+            outgoing = false,
+            startedAtMillis = now,
+        )
+        if (!audio.startPlayback(recorded)) {
             // Nothing to play it through -- a phone call has the audio focus, or
             // the output device will not open. Refusing is the honest answer:
             // accepting would tell the speaker they were heard while playing
@@ -481,7 +489,7 @@ class SessionManager(
                     }
 
                     attempts++
-                    signals.voiceStart(sessionId, current.peer, current.endpoint, localName)
+                    signals.voiceStart(sessionId, current.peer, current.endpoint, localName, current.peerName)
                 }
             }
         }

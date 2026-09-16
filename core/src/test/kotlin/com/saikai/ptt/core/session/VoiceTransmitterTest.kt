@@ -96,7 +96,7 @@ class VoiceTransmitterTest {
     }
 
     private fun start(name: String = "Kenji") =
-        completing { subject.voiceStart(session, peer, endpoint, name) }
+        completing { subject.voiceStart(session, peer, endpoint, name, "山田") }
 
     private fun end() = completing { subject.voiceEnd(session, peer, endpoint) }
 
@@ -311,7 +311,7 @@ class VoiceTransmitterTest {
 
         codec = MarkerCodec()
         val second = SessionId.random()
-        completing { subject.voiceStart(second, peer, endpoint, "Kenji") }
+        completing { subject.voiceStart(second, peer, endpoint, "Kenji", "山田") }
 
         assertEquals(2, codecsCreated)
         assertEquals(2, recording.begun)
@@ -476,16 +476,25 @@ class VoiceTransmitterTest {
         var discarded = 0
             private set
 
-        override fun begin(sessionId: SessionId) {
+        /** The last frame handed over, so a test can check it is the encoded one. */
+        var lastFrame: ByteArray? = null
+            private set
+
+        var interruptions = 0
+            private set
+
+        override fun begin(session: RecordingSession) {
             begun++
         }
 
-        override fun frame(pcm: ByteArray, offset: Int, length: Int, capturedAtMillis: Long) {
+        override fun frame(frame: ByteArray, offset: Int, length: Int, capturedAtMillis: Long) {
             frames++
+            lastFrame = frame.copyOfRange(offset, offset + length)
         }
 
-        override fun finish(sessionId: SessionId) {
+        override fun finish(sessionId: SessionId, interrupted: Boolean) {
             finished++
+            if (interrupted) interruptions++
         }
 
         override fun discard(sessionId: SessionId) {

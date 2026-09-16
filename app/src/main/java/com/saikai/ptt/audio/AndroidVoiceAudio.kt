@@ -9,7 +9,7 @@ import com.saikai.ptt.core.domain.AudioPlayer
 import com.saikai.ptt.core.domain.AudioRecorder
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.Logger
-import com.saikai.ptt.core.protocol.SessionId
+import com.saikai.ptt.core.session.RecordingSession
 import com.saikai.ptt.core.session.VoiceAudio
 import com.saikai.ptt.core.session.VoiceReceiver
 
@@ -65,7 +65,7 @@ class AndroidVoiceAudio(
         focus.release()
     }
 
-    override suspend fun startPlayback(sessionId: SessionId): Boolean {
+    override suspend fun startPlayback(session: RecordingSession): Boolean {
         if (!focus.request(::onFocusChange)) {
             logger.w(LogCategory.AUDIO) { "no audio focus; not opening the speaker" }
             return false
@@ -78,7 +78,13 @@ class AndroidVoiceAudio(
                 return false
             }
         }
-        if (!receiver.open(sessionId)) {
+        if (!receiver.open(
+                sessionId = session.sessionId,
+                peer = session.peer,
+                peerName = session.peerName,
+                startedAtMillis = session.startedAtMillis,
+            )
+        ) {
             // An open speaker with no decoder behind it would accept the
             // session and then play nothing, which is the one answer worse
             // than refusing it.

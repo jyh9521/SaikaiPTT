@@ -5,6 +5,7 @@ import com.saikai.ptt.core.common.Outcome
 import com.saikai.ptt.core.domain.LocalUser
 import com.saikai.ptt.core.domain.LocalUserRepository
 import com.saikai.ptt.core.domain.Peer
+import com.saikai.ptt.core.domain.StorageError
 import com.saikai.ptt.core.protocol.SessionId
 import com.saikai.ptt.core.session.SendFailure
 import com.saikai.ptt.core.session.SessionOutcome
@@ -34,6 +35,7 @@ class HomeUseCases(
     val observeServiceState: ObserveServiceState,
     val observeSession: ObserveSession,
     val observeOutcomes: ObserveOutcomes,
+    val observeStorageErrors: ObserveStorageErrors,
     val observeActiveUser: ObserveActiveUser,
     val startPtt: StartPtt,
     val stopPtt: StopPtt,
@@ -69,6 +71,18 @@ class ObserveSession(private val status: ServiceStatus) {
  */
 class ObserveOutcomes(private val status: ServiceStatus) {
     operator fun invoke(): SharedFlow<SessionOutcome> = status.outcomes
+}
+
+/**
+ * Recordings and history rows that could not be stored.
+ *
+ * Separate from [ObserveOutcomes] because a storage failure is not an outcome
+ * of the call: the audio was sent or played either way
+ * (`docs/02_Architecture.md` section 18). The screen shows it as a line of
+ * text, after the fact.
+ */
+class ObserveStorageErrors(private val status: ServiceStatus) {
+    operator fun invoke(): SharedFlow<StorageError> = status.storageErrors
 }
 
 /** The name this device transmits under, and null before one is chosen. */

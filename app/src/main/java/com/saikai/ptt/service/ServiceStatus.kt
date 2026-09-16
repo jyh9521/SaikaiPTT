@@ -1,6 +1,7 @@
 package com.saikai.ptt.service
 
 import com.saikai.ptt.core.domain.Peer
+import com.saikai.ptt.core.domain.StorageError
 import com.saikai.ptt.core.session.ReceptionStats
 import com.saikai.ptt.core.session.SessionOutcome
 import com.saikai.ptt.core.session.SessionState
@@ -97,6 +98,27 @@ class ServiceStatus {
 
     fun publishOutcome(outcome: SessionOutcome) {
         _outcomes.tryEmit(outcome)
+    }
+
+    private val _storageErrors = MutableSharedFlow<StorageError>(
+        replay = 0,
+        extraBufferCapacity = 4,
+    )
+
+    /**
+     * Recordings and history rows that could not be stored.
+     *
+     * Events, like [outcomes], and for the same reason: by the time anything
+     * reads one the conversation it concerns is over, and a value held as state
+     * would be shown again to the next screen that looked. Separate from
+     * [outcomes] because a storage failure is not an outcome of the call --
+     * `docs/02_Architecture.md` section 18 is explicit that the call itself was
+     * unaffected.
+     */
+    val storageErrors: SharedFlow<StorageError> = _storageErrors.asSharedFlow()
+
+    fun publishStorageError(error: StorageError) {
+        _storageErrors.tryEmit(error)
     }
 
     fun publish(state: ServiceState) {
