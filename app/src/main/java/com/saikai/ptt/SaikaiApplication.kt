@@ -2,6 +2,7 @@ package com.saikai.ptt
 
 import android.app.Application
 import com.saikai.ptt.di.AppContainer
+import com.saikai.ptt.permissions.PermissionInspector
 import com.saikai.ptt.storage.DataStoreSettingsRepository
 
 /**
@@ -23,6 +24,9 @@ class SaikaiApplication : Application() {
             settingsRepositoryFactory = { logger ->
                 DataStoreSettingsRepository.create(this, logger)
             },
+            // The application context, not an Activity's: permission state
+            // outlives every screen, and holding an Activity here would leak it.
+            permissionInspectorFactory = { PermissionInspector(this) },
         )
     }
 

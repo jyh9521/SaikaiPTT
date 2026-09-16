@@ -1,6 +1,7 @@
 package com.saikai.ptt.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -39,8 +40,13 @@ import com.saikai.ptt.SaikaiApplication
 import com.saikai.ptt.core.domain.AppLanguage
 import com.saikai.ptt.di.AppContainer
 import com.saikai.ptt.locale.AppLocale
+import com.saikai.ptt.permissions.AppPermission
+import com.saikai.ptt.permissions.PermissionNavigator
 import com.saikai.ptt.ui.home.HomeScreen
 import com.saikai.ptt.ui.home.HomeViewModel
+import com.saikai.ptt.ui.permissions.OnboardingScreen
+import com.saikai.ptt.ui.permissions.PermissionStatusScreen
+import com.saikai.ptt.ui.permissions.PermissionsViewModel
 import com.saikai.ptt.ui.theme.SaikaiPttTheme
 import com.saikai.ptt.ui.user.NameGate
 import com.saikai.ptt.ui.user.UserManagementScreen
@@ -52,21 +58,32 @@ import kotlinx.coroutines.launch
  * The application's single Activity: it decides which screen is on show.
  *
  * Deliberately thin (`.claude/CLAUDE.md` section 27). It attaches the chosen
- * language, builds the two view models, connects the talk button to the
- * microphone permission, and holds which screen is open. No state of its own
- * and no business logic.
+ * language, builds the view models, owns the two things that genuinely need an
+ * Activity -- runtime permission dialogs and launching system settings -- and
+ * holds which screen is open. No state of its own and no business logic.
  *
- * ### Two different things decide what is drawn
+ * ### Three things decide what is drawn, and only one of them is navigation
  *
- * The first is a **gate**, not navigation: a device with no name cannot
- * transmit at all, so the welcome screen is the whole app until one exists
- * (`docs/04_UI_UX.md` section 6). It is not somewhere the user navigates to and
- * there is nothing to go back to.
+ * First the **first-run sequence**, in the order `docs/01_PRD.md` section 50
+ * lays it out: permissions, then a name, then Home. Neither is somewhere the
+ * user navigates to and neither has anywhere to go back to -- a device with no
+ * name cannot transmit at all, and the walkthrough runs exactly once ever.
  *
- * The second is navigation proper, and it is one enum in a `rememberSaveable`
- * rather than a navigation library. See `docs/ADR/ADR-009-Navigation.md`.
+ * Then **navigation** proper, which is one enum in a `rememberSaveable` rather
+ * than a navigation library. See `docs/ADR/ADR-009-Navigation.md`.
  */
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Bumped on every resume, to re-read the permissions.
+     *
+     * Android publishes no change notification for a permission, and the moment
+     * one is most likely to have changed is the moment the user comes back from
+     * system settings -- which is this. A Compose state rather than a lifecycle
+     * observer inside the composition, because `LocalLifecycleOwner` has moved
+     * between artifacts more than once and this needs no library at all.
+     */
+    private var resumeCount by mutableStateOf(0)
 
     /**
      * Applies the chosen language before any resource is resolved.
@@ -76,6 +93,11 @@ class MainActivity : ComponentActivity() {
      */
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumeCount++
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,51 +111,59 @@ class MainActivity : ComponentActivity() {
                 val users: UsersViewModel = viewModel(
                     factory = UsersViewModel.Factory(container.userUseCases)
                 )
+                val permissions: PermissionsViewModel = viewModel(
+                    factory = PermissionsViewModel.Factory(container.permissionUseCases)
+                )
+                val openPermission = rememberPermissionOpener(container, permissions)
+
+                LaunchedEffect(resumeCount) { permissions.refresh() }
+
                 val gate by users.gate.collectAsState()
+                val guidanceShown by permissions.guidanceShown.collectAsState()
                 var destination by rememberSaveable { mutableStateOf(Destination.HOME) }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     val padded = Modifier.padding(innerPadding)
-                    when (gate) {
-                        // The answer has not arrived from storage yet. Drawing
-                        // the welcome screen here would flash "create a name" at
-                        // a user who created one months ago.
-                        NameGate.Loading -> Splash(padded)
+                    when {
+                        // Storage has not answered yet. Drawing anything else
+                        // here would flash a first-run screen at somebody who
+                        // finished the first run months ago.
+                        gate == NameGate.Loading || guidanceShown == null -> Splash(padded)
 
-                        NameGate.Missing -> WelcomeScreen(
+                        guidanceShown == false -> OnboardingScreen(
+                            step = permissions.step,
+                            onOpen = openPermission,
+                            onAdvance = permissions::advance,
+                            onBack = permissions::back,
+                            modifier = padded,
+                        )
+
+                        gate == NameGate.Missing -> WelcomeScreen(
                             message = users.message.collectAsState().value,
                             onCreate = users::createFirstUser,
                             modifier = padded,
                         )
 
-                        is NameGate.Ready -> when (destination) {
-                            Destination.HOME -> Home(
-                                container = container,
-                                onOpenUsers = { destination = Destination.USERS },
-                                modifier = padded,
-                            )
+                        destination == Destination.USERS -> Users(users, padded) {
+                            destination = Destination.HOME
+                        }
 
-                            Destination.USERS -> UserManagementScreen(
-                                rows = users.rows,
-                                editor = users.editor,
-                                discardPrompt = users.discardPrompt,
-                                deletePrompt = users.deletePrompt,
-                                message = users.message,
-                                onBack = {
-                                    users.dismissMessage()
-                                    destination = Destination.HOME
-                                },
-                                onSwitch = users::switchTo,
-                                onStartCreate = users::startCreate,
-                                onStartEdit = users::startEdit,
-                                onRequestDelete = users::requestDelete,
-                                onEditDraft = users::editDraft,
-                                onSaveEditor = users::saveEditor,
-                                onCloseEditor = users::requestCloseEditor,
-                                onConfirmDiscard = users::confirmDiscard,
-                                onCancelDiscard = users::cancelDiscard,
-                                onConfirmDelete = users::confirmDelete,
-                                onCancelDelete = users::cancelDelete,
+                        destination == Destination.PERMISSIONS -> PermissionStatusScreen(
+                            rows = permissions.rows,
+                            onOpen = openPermission,
+                            onBack = { destination = Destination.HOME },
+                            modifier = padded,
+                        )
+
+                        else -> {
+                            // Everything the first run asks for is done, which
+                            // is the definition of the flag.
+                            LaunchedEffect(Unit) { permissions.markFirstLaunchCompleted() }
+                            Home(
+                                container = container,
+                                permissions = permissions,
+                                onOpenUsers = { destination = Destination.USERS },
+                                onOpenPermissions = { destination = Destination.PERMISSIONS },
                                 modifier = padded,
                             )
                         }
@@ -153,7 +183,9 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun Home(
         container: AppContainer,
+        permissions: PermissionsViewModel,
         onOpenUsers: () -> Unit,
+        onOpenPermissions: () -> Unit,
         modifier: Modifier,
     ) {
         val home: HomeViewModel = viewModel(
@@ -166,8 +198,10 @@ class MainActivity : ComponentActivity() {
             peers = home.peers,
             target = home.target,
             ptt = home.ptt,
+            permissionWarning = permissions.anyDenied,
             onSelectPeer = home::select,
             onOpenUsers = onOpenUsers,
+            onOpenPermissions = onOpenPermissions,
             onPressTalk = talk.onPress,
             onReleaseTalk = talk.onRelease,
             onSetServiceRunning = { running ->
@@ -194,10 +228,88 @@ class MainActivity : ComponentActivity() {
             },
         )
     }
+
+    @Composable
+    private fun Users(users: UsersViewModel, modifier: Modifier, onBack: () -> Unit) {
+        UserManagementScreen(
+            rows = users.rows,
+            editor = users.editor,
+            discardPrompt = users.discardPrompt,
+            deletePrompt = users.deletePrompt,
+            message = users.message,
+            onBack = {
+                users.dismissMessage()
+                onBack()
+            },
+            onSwitch = users::switchTo,
+            onStartCreate = users::startCreate,
+            onStartEdit = users::startEdit,
+            onRequestDelete = users::requestDelete,
+            onEditDraft = users::editDraft,
+            onSaveEditor = users::saveEditor,
+            onCloseEditor = users::requestCloseEditor,
+            onConfirmDiscard = users::confirmDiscard,
+            onCancelDiscard = users::cancelDiscard,
+            onConfirmDelete = users::confirmDelete,
+            onCancelDelete = users::cancelDelete,
+            modifier = modifier,
+        )
+    }
+
+    /**
+     * Turns "the user tapped this permission" into whatever that permission
+     * actually needs, and reports whether anything opened.
+     *
+     * Two of the five are runtime permissions with a system dialog; the rest
+     * live in Settings. The escalation between them is deliberate and is the
+     * cheapest way to handle a permanently refused one without asking the
+     * platform awkward questions: **the first tap asks, a later tap goes to
+     * Settings.** Android stops showing the dialog after two refusals, and a
+     * button whose only effect is a dialog that no longer appears is a button
+     * that looks broken.
+     *
+     * Returning false is a real answer, not a failure: auto-start has no
+     * platform intent on any device, and any intent can be refused by a ROM
+     * that does not have that screen. The caller shows written instructions
+     * instead (`docs/04_UI_UX.md` section 36.1).
+     */
+    @Composable
+    private fun rememberPermissionOpener(
+        container: AppContainer,
+        permissions: PermissionsViewModel,
+    ): (AppPermission) -> Boolean {
+        val asked = remember { mutableSetOf<AppPermission>() }
+        val launcher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { permissions.refresh() }
+
+        return remember(container, permissions) {
+            opener@{ permission: AppPermission ->
+                val runtime = container.permissionInspector.runtimePermission(permission)
+                if (runtime != null && asked.add(permission)) {
+                    launcher.launch(runtime)
+                    return@opener true
+                }
+
+                val intent = PermissionNavigator.settingsIntent(this@MainActivity, permission)
+                    ?: return@opener false
+                try {
+                    startActivity(intent)
+                    true
+                } catch (_: ActivityNotFoundException) {
+                    // A ROM without that settings screen. Expected, not broken.
+                    false
+                } catch (_: SecurityException) {
+                    // A ROM whose settings screen is not exported to us.
+                    false
+                }
+            }
+        }
+    }
 }
 
-/** Which screen is open, once there is a name. */
-private enum class Destination { HOME, USERS }
+/** Which screen is open, once the first run is done. */
+private enum class Destination { HOME, USERS, PERMISSIONS }
 
 /** Shown for the one frame or two before storage answers. */
 @Composable
@@ -221,10 +333,12 @@ private class TalkHandlers(val onPress: () -> Unit, val onRelease: () -> Unit)
  * than in `HomeScreen` because the screen should be composable in a preview and
  * a test without a permission controller behind it.
  *
- * The first press on a fresh install asks, and does not transmit. Task34 owns
- * onboarding and will ask before the user ever reaches this screen; until then
- * this is what stops the first press failing with MIC_UNAVAILABLE and looking
- * like a bug in the audio pipeline.
+ * This survives Task34's walkthrough rather than being replaced by it. Asking
+ * in the moment the user reaches for the microphone is the one request Android
+ * itself recommends, and it is not what section 36.1 forbids: the user pressed
+ * a button, and nothing here asks on its own. Once the platform stops showing
+ * the dialog, the press fails with MIC_UNAVAILABLE and Home says so, with the
+ * permission notice above it leading to the status screen.
  */
 @Composable
 private fun rememberMicrophoneGate(
@@ -269,9 +383,8 @@ private fun rememberMicrophoneGate(
 /**
  * Controls that only exist until the screen that owns them is built.
  *
- * Language and the service switch belong to Task35's settings screen. The name
- * editor that used to sit here is gone: Task33 gives names their own screens,
- * which is what this was standing in for.
+ * Language and the service switch belong to Task35's settings screen, which is
+ * also where the permission status screen's entry point moves.
  *
  * Guarded by `BuildConfig.DEBUG` at the call site;
  * `docs/08_ReleaseChecklist.md` section 43 forbids test UI in a release build.

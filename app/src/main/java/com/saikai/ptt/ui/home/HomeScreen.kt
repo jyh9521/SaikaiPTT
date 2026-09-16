@@ -88,8 +88,10 @@ fun HomeScreen(
     peers: StateFlow<PeerListState>,
     target: StateFlow<TargetState>,
     ptt: StateFlow<PttState>,
+    permissionWarning: StateFlow<Boolean>,
     onSelectPeer: (DeviceId) -> Unit,
     onOpenUsers: () -> Unit,
+    onOpenPermissions: () -> Unit,
     onPressTalk: () -> Unit,
     onReleaseTalk: () -> Unit,
     onSetServiceRunning: (Boolean) -> Unit,
@@ -101,6 +103,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         HeaderSection(header, onOpenUsers, onSetServiceRunning)
+        PermissionNotice(permissionWarning, onOpenPermissions)
         debugExtras()
 
         Text(
@@ -213,6 +216,45 @@ private fun ConnectionLine(
                     Text(stringResource(R.string.home_service_start))
                 }
             }
+        }
+    }
+}
+
+/**
+ * One line, only when something has been refused.
+ *
+ * `docs/01_PRD.md` section 50 asks that missing permissions be said clearly
+ * without getting in the way of anything else, and section 36.1 forbids asking
+ * again with a dialog -- so this is a notice, not a prompt: it never interrupts
+ * and it leads to the one screen that can do something about it.
+ *
+ * Shown here because Home is currently the only screen there is. Task35 moves
+ * the entry point into Settings, where section 36 wants it.
+ */
+@Composable
+private fun PermissionNotice(warning: StateFlow<Boolean>, onOpen: () -> Unit) {
+    if (!warning.collectAsState().value) return
+
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.home_permission_notice),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringResource(R.string.home_permission_action),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
@@ -583,8 +625,10 @@ private fun HomeScreenPreview() {
             peers = MutableStateFlow(PeerListState.Peers(rows)),
             target = MutableStateFlow(TargetState(rows[0].deviceId, "山田")),
             ptt = MutableStateFlow(PttState(PttPhase.READY, "山田", null)),
+            permissionWarning = MutableStateFlow(false),
             onSelectPeer = {},
             onOpenUsers = {},
+            onOpenPermissions = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},
@@ -601,8 +645,10 @@ private fun HomeScreenOfflinePreview() {
             peers = MutableStateFlow(PeerListState.Unavailable),
             target = MutableStateFlow(TargetState(null, null)),
             ptt = MutableStateFlow(PttState(PttPhase.UNAVAILABLE, null, PttMessage.TARGET_BUSY)),
+            permissionWarning = MutableStateFlow(false),
             onSelectPeer = {},
             onOpenUsers = {},
+            onOpenPermissions = {},
             onPressTalk = {},
             onReleaseTalk = {},
             onSetServiceRunning = {},

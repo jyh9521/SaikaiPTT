@@ -73,6 +73,51 @@
     <string name="action_cancel">キャンセル</string>
     <string name="action_save">保存</string>
 
+    <!-- Permissions: the first-run walkthrough and the status screen (Task34). -->
+    <string name="permission_screen_title">権限の状態</string>
+    <string name="permission_screen_note">すべて許可しなくてもアプリは動作します。許可しない場合に何ができなくなるかを各項目に示します。</string>
+
+    <string name="permission_microphone">マイク</string>
+    <string name="permission_notifications">通知</string>
+    <string name="permission_overlay">他のアプリの上に表示</string>
+    <string name="permission_battery">バッテリー最適化の除外</string>
+    <string name="permission_auto_start">自動起動</string>
+
+    <!-- What is lost without each one (docs/04_UI_UX.md 36.1). -->
+    <string name="permission_microphone_without">送信できません。相手の声を聞くことはできます。</string>
+    <string name="permission_notifications_without">動作中かどうかが画面で確認できません。端末によってはアプリが停止されやすくなります。</string>
+    <string name="permission_overlay_without">バックグラウンドでの受信表示が通知だけになります。</string>
+    <string name="permission_battery_without">バックグラウンドで停止されることがあります。</string>
+    <string name="permission_auto_start_without">再起動後に自動で復帰しないことがあります。</string>
+
+    <!-- Shown when there is no settings screen to open, or the device refused to open it. -->
+    <string name="permission_manual_microphone">端末の「設定」→「アプリ」→「西海PTT」→「権限」→「マイク」から許可してください。</string>
+    <string name="permission_manual_notifications">端末の「設定」→「アプリ」→「西海PTT」→「通知」から許可してください。</string>
+    <string name="permission_manual_overlay">端末の「設定」→「アプリ」→「西海PTT」→「他のアプリの上に表示」から許可してください。</string>
+    <string name="permission_manual_battery">端末の「設定」→「バッテリー」→「バッテリー最適化」から、西海PTT を対象外にしてください。</string>
+    <!--
+        Deliberately vague about where: this setting has no standard API, no
+        standard name and no standard place, and naming a vendor's screen here
+        would be wrong on every other device (docs/01_PRD.md 24.2).
+    -->
+    <string name="permission_manual_auto_start">この設定は端末メーカーごとに場所が異なります。端末の「設定」でアプリごとの「自動起動」または「バックグラウンド動作」の項目を探し、西海PTT を許可してください。</string>
+
+    <string name="permission_state_granted">許可済み</string>
+    <string name="permission_state_denied">未許可</string>
+    <string name="permission_state_unknown">確認できません</string>
+    <string name="permission_state_not_applicable">この端末では不要</string>
+    <string name="permission_current_state">現在：%1$s</string>
+
+    <string name="onboarding_progress">%1$d / %2$d</string>
+    <string name="onboarding_without_label">許可しない場合</string>
+    <string name="onboarding_allow">許可する</string>
+    <string name="onboarding_skip">スキップ</string>
+    <string name="onboarding_next">次へ</string>
+    <string name="onboarding_finish">完了</string>
+
+    <string name="home_permission_notice">許可されていない権限があります</string>
+    <string name="home_permission_action">確認</string>
+
     <!--
         Peer state. Shown as text beside the status shape, never as colour
         alone (docs/04_UI_UX.md section 11.3). DISCOVERED is an internal

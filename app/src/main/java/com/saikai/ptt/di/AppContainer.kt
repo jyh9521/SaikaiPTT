@@ -10,6 +10,7 @@ import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.locale.LocaleController
 import com.saikai.ptt.AppVisibility
+import com.saikai.ptt.permissions.PermissionInspector
 import com.saikai.ptt.logging.AndroidLogSink
 import com.saikai.ptt.service.PttGateway
 import com.saikai.ptt.service.ServiceStatus
@@ -28,6 +29,11 @@ import com.saikai.ptt.usecase.ObserveLocalUsers
 import com.saikai.ptt.usecase.RenameLocalUser
 import com.saikai.ptt.usecase.SwitchActiveUser
 import com.saikai.ptt.usecase.UserUseCases
+import com.saikai.ptt.usecase.CompleteFirstLaunch
+import com.saikai.ptt.usecase.CompleteGuidance
+import com.saikai.ptt.usecase.ObserveFirstRun
+import com.saikai.ptt.usecase.PermissionUseCases
+import com.saikai.ptt.usecase.ReadPermissions
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -54,6 +60,12 @@ class AppContainer(
     isDebugBuild: Boolean,
     logSink: LogSink = AndroidLogSink(),
     settingsRepositoryFactory: (Logger) -> SettingsRepository,
+    /**
+     * Reads the system's permission state. Null in a plain JVM test, where
+     * there is no system to ask and no screen to ask on its behalf -- which is
+     * also why [permissionUseCases] is the only thing that touches it.
+     */
+    private val permissionInspectorFactory: (() -> PermissionInspector)? = null,
 ) {
 
     /**
@@ -167,6 +179,29 @@ class AppContainer(
             renameUser = RenameLocalUser(localUsers),
             deleteUser = DeleteLocalUser(localUsers),
             switchActiveUser = SwitchActiveUser(localUsers, serviceStatus),
+        )
+    }
+
+    /**
+     * Reads the real state of every system permission, on demand.
+     *
+     * Application scope because none of these questions are about an Activity,
+     * and because the answer must be the same wherever it is asked -- the
+     * walkthrough, the status screen and the Home notice all read this one.
+     */
+    val permissionInspector: PermissionInspector by lazy {
+        val factory = permissionInspectorFactory
+            ?: error("This container was built without a PermissionInspector")
+        factory()
+    }
+
+    /** The first-run walkthrough and the permission status screen. */
+    val permissionUseCases: PermissionUseCases by lazy {
+        PermissionUseCases(
+            readPermissions = ReadPermissions(permissionInspector),
+            observeFirstRun = ObserveFirstRun(settingsRepository),
+            completeGuidance = CompleteGuidance(settingsRepository),
+            completeFirstLaunch = CompleteFirstLaunch(settingsRepository),
         )
     }
 

@@ -34,7 +34,7 @@
     <string name="user_edit_title">Edit name</string>
     <string name="user_delete">Delete</string>
     <string name="user_delete_title">Delete this name?</string>
-    <string name="user_delete_body">"%1$s" will be deleted. This cannot be undone.</string>
+    <string name="user_delete_body">“%1$s” will be deleted. This cannot be undone.</string>
     <string name="user_delete_confirm">Delete</string>
     <string name="user_discard_title">Discard changes?</string>
     <string name="user_discard_body">There are unsaved changes.</string>
@@ -50,6 +50,43 @@
     <string name="action_back">Back</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
+
+    <string name="permission_screen_title">Permissions</string>
+    <string name="permission_screen_note">The app works without all of these. Each item says what you lose by leaving it off.</string>
+
+    <string name="permission_microphone">Microphone</string>
+    <string name="permission_notifications">Notifications</string>
+    <string name="permission_overlay">Display over other apps</string>
+    <string name="permission_battery">Battery optimisation exemption</string>
+    <string name="permission_auto_start">Auto-start</string>
+
+    <string name="permission_microphone_without">You cannot talk. You can still hear other people.</string>
+    <string name="permission_notifications_without">No visible sign the app is running, and some devices stop it sooner.</string>
+    <string name="permission_overlay_without">Incoming calls are shown only in the notification.</string>
+    <string name="permission_battery_without">The system may stop the app in the background.</string>
+    <string name="permission_auto_start_without">The app may not come back after a restart.</string>
+
+    <string name="permission_manual_microphone">Open Settings → Apps → SaikaiPTT → Permissions → Microphone and allow it.</string>
+    <string name="permission_manual_notifications">Open Settings → Apps → SaikaiPTT → Notifications and allow them.</string>
+    <string name="permission_manual_overlay">Open Settings → Apps → SaikaiPTT → Display over other apps and allow it.</string>
+    <string name="permission_manual_battery">Open Settings → Battery → Battery optimisation and exclude SaikaiPTT.</string>
+    <string name="permission_manual_auto_start">This setting is in a different place on every manufacturer\'s device. In Settings, look for a per-app “auto-start” or “background activity” option and allow SaikaiPTT.</string>
+
+    <string name="permission_state_granted">Allowed</string>
+    <string name="permission_state_denied">Not allowed</string>
+    <string name="permission_state_unknown">Cannot be checked</string>
+    <string name="permission_state_not_applicable">Not needed here</string>
+    <string name="permission_current_state">Now: %1$s</string>
+
+    <string name="onboarding_progress">%1$d / %2$d</string>
+    <string name="onboarding_without_label">Without this</string>
+    <string name="onboarding_allow">Allow</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_finish">Done</string>
+
+    <string name="home_permission_notice">Some permissions are not allowed</string>
+    <string name="home_permission_action">Review</string>
 
     <string name="peer_state_online">Online</string>
     <string name="peer_state_busy">In a call</string>
