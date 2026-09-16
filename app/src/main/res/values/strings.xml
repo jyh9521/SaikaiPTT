@@ -32,11 +32,13 @@
     <string name="placeholder_session_label">セッション</string>
     <string name="placeholder_reception_label">受信統計</string>
 
-    <!-- Ongoing foreground-service notification. Replaced in Task31. -->
+    <!-- Ongoing foreground-service notification (Task31, docs/04_UI_UX.md 18.2). -->
     <string name="notification_channel_communication">通信</string>
     <string name="notification_channel_communication_description">受信を続けるために表示される通知です</string>
     <string name="notification_service_title">西海PTT</string>
-    <string name="notification_service_text">受信待機中</string>
+    <string name="notification_service_text">動作中です</string>
+    <!-- Shown while a transmission is playing and nothing else is showing it. -->
+    <string name="notification_service_receiving">受信中：%1$s</string>
 
     <!-- Endonyms: a language is always offered in its own script. -->
     <string name="language_japanese" translatable="false">日本語</string>

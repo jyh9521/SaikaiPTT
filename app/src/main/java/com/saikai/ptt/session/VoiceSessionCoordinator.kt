@@ -43,6 +43,7 @@ class VoiceSessionCoordinator(
     private val receiver: VoiceReceiver,
     private val powerLocks: VoiceSessionPowerLocks,
     private val onTransmittingEnded: () -> Unit,
+    private val onReceivingChanged: (peerName: String?) -> Unit,
     private val publishSession: (SessionState) -> Unit,
     private val publishReception: (ReceptionStats?) -> Unit,
     private val logger: Logger,
@@ -58,6 +59,9 @@ class VoiceSessionCoordinator(
 
     /** Whether the last observed state was a session at all. */
     private var active = false
+
+    /** The peer last reported as being listened to, so only edges are reported. */
+    private var receivingFrom: String? = null
 
     override suspend fun start() {
         router.register(listener)
@@ -85,6 +89,10 @@ class VoiceSessionCoordinator(
         powerLocks.release()
         onTransmittingEnded()
         transmitting = false
+        if (receivingFrom != null) {
+            receivingFrom = null
+            onReceivingChanged(null)
+        }
         publishSession(SessionState.Idle)
     }
 
@@ -102,6 +110,16 @@ class VoiceSessionCoordinator(
         val nowActive = state is SessionState.Active
         if (active && !nowActive) publishReception(receiver.lastReception)
         active = nowActive
+
+        // Edges again, and for the same kind of reason: `docs/01_PRD.md`
+        // section 22 allows the ongoing notification two changes a session --
+        // one when a transmission starts and one when it ends -- and forbids
+        // anything that refreshes as it goes.
+        val nowReceivingFrom = (state as? SessionState.Receiving)?.peerName
+        if (nowReceivingFrom != receivingFrom) {
+            receivingFrom = nowReceivingFrom
+            onReceivingChanged(nowReceivingFrom)
+        }
 
         publishSession(state)
     }

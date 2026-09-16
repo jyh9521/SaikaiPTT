@@ -244,6 +244,7 @@ class ServiceContainer(
         receiver = receiver,
         powerLocks = powerLocks,
         onTransmittingEnded = { notifications.demoteFromMicrophone(service) },
+        onReceivingChanged = { peerName -> announceReceiving(service, notifications, peerName) },
         publishSession = app.serviceStatus::publishSession,
         publishReception = app.serviceStatus::publishReception,
         logger = app.logger,
@@ -308,6 +309,30 @@ class ServiceContainer(
     private fun currentReceivingSession(): ReceivingSession? =
         (sessions.state.value as? SessionState.Receiving)
             ?.let { ReceivingSession(it.sessionId, it.peer) }
+
+    /**
+     * Tells the user a transmission is playing, when nothing else will.
+     *
+     * `docs/04_UI_UX.md` section 18.2 makes the ongoing notification the
+     * *fallback*: with the overlay on screen it is the overlay's job, and
+     * changing the notification as well would be two things saying the same
+     * thing. The overlay is Task36, so today there is nothing else and this
+     * always speaks; when Task36 lands, the condition goes here and nowhere
+     * else.
+     *
+     * What section 18.2 does forbid outright is no visible feedback at all.
+     */
+    private fun announceReceiving(
+        service: Service,
+        notifications: ServiceNotifications,
+        peerName: String?,
+    ) {
+        if (peerName == null) {
+            notifications.showResident(service)
+        } else {
+            notifications.showReceiving(service, peerName)
+        }
+    }
 
     /**
      * A phone call, or anything else, took the audio away.

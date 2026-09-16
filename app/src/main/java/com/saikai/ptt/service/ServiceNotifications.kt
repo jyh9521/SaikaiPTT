@@ -14,18 +14,47 @@ import com.saikai.ptt.R
 /**
  * The ongoing notification the foreground service is required to show.
  *
- * Placeholder content: the real notification, with the active user, the peer
- * being talked to and its actions, is Task31. What is not placeholder is the
- * channel and the foreground type, because both are load-bearing on modern
- * Android and both are awkward to change once devices have the channel.
- *
  * The channel is LOW importance: this notification exists because the platform
  * requires one for a service that keeps a socket open, not because the user
  * needs to be told anything. Making a noise every time the app starts receiving
  * would train them to turn it off, and turning it off is what stops the product
  * working.
+ *
+ * ### It says two things, and changes between them at most twice a session
+ *
+ * Resident, it says the app is running. While a transmission is coming in and
+ * nothing else is showing it, it names the speaker (`docs/04_UI_UX.md` section
+ * 18.2). `docs/01_PRD.md` section 22 caps that at two changes per session --
+ * one at the start and one at the end -- and forbids a per-second refresh,
+ * which is why the caller drives this from the *edges* of the session state
+ * rather than from anything that ticks.
+ *
+ * ### One state, one call
+ *
+ * Both the text and the foreground service type are held here, and every change
+ * goes through [apply], which re-posts with the current pair. That matters
+ * because the two change independently: promoting to the microphone type
+ * re-posts the notification, and if the type call did not carry the current
+ * text it would quietly revert it. A call that changes nothing does nothing, so
+ * the count of posts stays honest.
+ *
+ * ### A denied notification permission is not an error
+ *
+ * From Android 13, POST_NOTIFICATIONS is a runtime permission and the user may
+ * refuse it. `startForeground` still works, the service still runs, and the
+ * notification is simply not displayed -- so receiving keeps working and the
+ * user has no way to see that it is. That is the platform's trade, not
+ * something to fail on, and nothing here treats it as a failure.
  */
 class ServiceNotifications(private val context: Context) {
+
+    private val lock = Any()
+
+    /** The peer being listened to, or null when nothing is coming in. */
+    private var receivingFrom: String? = null
+
+    /** The foreground service type currently declared. */
+    private var currentType: Int = RESIDENT_TYPE
 
     /**
      * Creates the channel. Safe to call repeatedly; the platform ignores a
@@ -44,9 +73,20 @@ class ServiceNotifications(private val context: Context) {
             ?.createNotificationChannel(channel)
     }
 
-    fun ongoing(): Notification = Notification.Builder(context, CHANNEL_ID)
+    fun ongoing(): Notification = ongoing(synchronized(lock) { receivingFrom })
+
+    private fun ongoing(receivingFrom: String?): Notification = Notification.Builder(
+        context,
+        CHANNEL_ID,
+    )
         .setContentTitle(context.getString(R.string.notification_service_title))
-        .setContentText(context.getString(R.string.notification_service_text))
+        .setContentText(
+            if (receivingFrom == null) {
+                context.getString(R.string.notification_service_text)
+            } else {
+                context.getString(R.string.notification_service_receiving, receivingFrom)
+            }
+        )
         // Placeholder icon; Task31 supplies a proper monochrome status icon.
         .setSmallIcon(R.drawable.ic_launcher_foreground)
         .setCategory(Notification.CATEGORY_SERVICE)
@@ -79,7 +119,30 @@ class ServiceNotifications(private val context: Context) {
      * notification.
      */
     fun startForeground(service: Service) {
-        service.startForeground(ONGOING_ID, ongoing(), RESIDENT_TYPE)
+        // Unconditional, unlike every other path here: the platform gives a
+        // service started with startForegroundService only seconds to make this
+        // call, and skipping it because nothing appears to have changed would
+        // be skipping the one that has to happen.
+        synchronized(lock) {
+            currentType = RESIDENT_TYPE
+            service.startForeground(ONGOING_ID, ongoing(receivingFrom), RESIDENT_TYPE)
+        }
+    }
+
+    /**
+     * Names the peer whose transmission is playing.
+     *
+     * `docs/04_UI_UX.md` section 18.2: with no overlay on screen this is the
+     * only sign the user gets that their device is speaking to them, and
+     * "no visible feedback at all" is explicitly not allowed.
+     */
+    fun showReceiving(service: Service, peerName: String) {
+        synchronized(lock) { apply(service, currentType, peerName) }
+    }
+
+    /** Back to saying nothing more than that the app is running. */
+    fun showResident(service: Service) {
+        synchronized(lock) { apply(service, currentType, receiving = null) }
     }
 
     /**
@@ -100,7 +163,8 @@ class ServiceNotifications(private val context: Context) {
      *
      * @return true when the service is running as a microphone service.
      */
-    fun promoteToMicrophone(service: Service): Boolean = setType(service, TRANSMITTING_TYPE)
+    fun promoteToMicrophone(service: Service): Boolean =
+        synchronized(lock) { apply(service, TRANSMITTING_TYPE, receivingFrom) }
 
     /**
      * Drops back to the resident type.
@@ -110,15 +174,41 @@ class ServiceNotifications(private val context: Context) {
      * keeps the microphone indicator lit in the status bar, which is an
      * unambiguous claim to the user that the app is listening to them.
      */
-    fun demoteFromMicrophone(service: Service): Boolean = setType(service, RESIDENT_TYPE)
+    fun demoteFromMicrophone(service: Service): Boolean =
+        synchronized(lock) { apply(service, RESIDENT_TYPE, receivingFrom) }
 
-    private fun setType(service: Service, type: Int): Boolean = try {
-        service.startForeground(ONGOING_ID, ongoing(), type)
-        true
-    } catch (_: IllegalStateException) {
-        false
-    } catch (_: SecurityException) {
-        false
+    /**
+     * Re-posts with the state after the change, or does nothing if there is none.
+     *
+     * The caller holds [lock] and passes the whole state, so a change to one
+     * half cannot drop the other -- which is the failure this exists to
+     * prevent: promoting to the microphone type re-posts the notification, and
+     * a type call that did not carry the current text would quietly revert it.
+     *
+     * Doing nothing when nothing changed is what keeps the two-updates-a-session
+     * cap of `docs/01_PRD.md` section 22 true by construction rather than by
+     * the caller being careful.
+     *
+     * @return false only when the platform refused a type it does not allow
+     *   from the background -- a real answer about whether this device may
+     *   transmit, not an error.
+     */
+    private fun apply(service: Service, type: Int, receiving: String?): Boolean {
+        if (type == currentType && receiving == receivingFrom) return true
+
+        try {
+            service.startForeground(ONGOING_ID, ongoing(receiving), type)
+        } catch (_: IllegalStateException) {
+            // Android 14 refuses a promotion to the microphone type from the
+            // background. Nothing changed, so nothing is recorded as changed.
+            return false
+        } catch (_: SecurityException) {
+            return false
+        }
+
+        currentType = type
+        receivingFrom = receiving
+        return true
     }
 
     /**
