@@ -82,6 +82,23 @@ ksp = "2.2.10-2.0.2"
 # and raise it; lint's GradleDependency check will report it once one runs.
 room = "2.7.0"
 
+# sherpa-onnx, the offline recognition engine (ADR-012). Pinned to the release
+# whose published AAR was checked: every LOAD segment in all eight arm .so files
+# is 16 KB aligned, which is what Vosk failed (ADR-011). Do not float this --
+# a newer release is a different binary and the check has to be redone.
+#
+# No "v" prefix even though the git tag is v1.13.8. That is not a guess: the
+# repository's own jitpack.yml at that tag runs
+# `mvn install:install-file ... -DartifactId=sherpa-onnx -Dversion=1.13.8`,
+# so 1.13.8 is the version JitPack will have on disk to serve.
+#
+# Confirmed by a build. Note which coordinate is below: JitPack publishes a
+# multi-module project twice over -- an aggregate POM at the repository's own
+# coordinate, com.github.k2-fsa:sherpa-onnx, and the real artifacts under a
+# subgroup named after the repository, com.github.k2-fsa.sherpa-onnx. The
+# aggregate has packaging=pom and carries no classes at all.
+sherpaOnnx = "1.13.8"
+
 # Storage / concurrency
 # Versions taken from the Gradle cache, which is the only source of truth
 # available here (CLAUDE.md 34.2). Lint's GradleDependency check reports newer
@@ -133,6 +150,15 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+# Offline Japanese recognition (ADR-012). Not on Maven Central; see the
+# JitPack repository declared in settings.gradle.kts.
+#
+# The group is the subgroup, with a dot before "sherpa-onnx". Depending on
+# com.github.k2-fsa:sherpa-onnx instead resolves, downloads and compiles
+# against nothing: it is the aggregate POM, and the build fails with every
+# com.k2fsa reference unresolved rather than with a missing dependency.
+sherpa-onnx = { group = "com.github.k2-fsa.sherpa-onnx", name = "sherpa-onnx", version.ref = "sherpaOnnx" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

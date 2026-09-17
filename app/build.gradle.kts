@@ -70,9 +70,15 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Task23 (Opus) and Task41 (Vosk) add native libraries. Both must ship
-        // 16 KB page-aligned .so files, required by Android 15+.
-        // See docs/ADR/ADR-004 and ADR-006.
+        // Task23 (Opus) and Task45 (sherpa-onnx) add native libraries. Both
+        // must ship 16 KB page-aligned .so files, required by Android 15+.
+        // See docs/ADR/ADR-004, ADR-011 and ADR-012.
+        //
+        // This also decides what comes out of the sherpa-onnx AAR, which
+        // carries x86 and x86_64 as well: the filter applies to a dependency's
+        // jniLibs, not only to what this module builds. ADR-012's APK budget
+        // assumes those two are gone, so a release build that grew by tens of
+        // megabytes is this line having stopped working.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
@@ -159,7 +165,7 @@ android {
             // This is what lets the loader map .so files directly, and is a
             // precondition for the 16 KB alignment requirement (ADR-004).
             // Set explicitly rather than relying on the default, because it is
-            // load-bearing for Task23 and Task41.
+            // load-bearing for Task23 (Opus) and Task45 (sherpa-onnx).
             useLegacyPackaging = false
         }
     }
@@ -249,6 +255,26 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
+
+    // Offline Japanese recognition. Default off on every device
+    // (CLAUDE.md 18.1); the model is downloaded, never bundled (ADR-012).
+    // This is the Android AAR itself, not the aggregate POM that JitPack also
+    // publishes for the project -- see the note in libs.versions.toml.
+    implementation(libs.sherpa.onnx) {
+        // Non-transitive, and this is load-bearing rather than tidiness.
+        //
+        // The sherpa-onnx project ships seven other artifacts beside this
+        // one: a JVM jar and five jars of desktop native libraries, for
+        // Linux, macOS and Windows, x64 and arm64. On a desktop Java build
+        // that is the point. In an APK they would arrive as Java resources,
+        // where abiFilters does not reach them and where nothing would ever
+        // load them.
+        //
+        // The AAR alone is enough: it carries the Kotlin API and the Android
+        // .so files whose 16 KB alignment ADR-011 verified. It is also what
+        // sherpa-onnx's own Android sample uses, dropped straight into libs.
+        isTransitive = false
+    }
 
     // Test
     testImplementation(libs.junit)

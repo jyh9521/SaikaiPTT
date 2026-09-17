@@ -99,6 +99,44 @@ internal class FakeHistory(
         return Outcome.success(rows.filter { it.isFavorite }.take(limit))
     }
 
+    override suspend fun pendingTranscripts(
+        limit: Int,
+    ): Outcome<List<CommunicationRecord>, HistoryError> {
+        if (!readable) return Outcome.failure(HistoryError.Unavailable("test"))
+        return Outcome.success(
+            rows.filter { it.transcriptStatus == TranscriptStatus.PENDING && it.audioPath != null }
+                .sortedBy { it.timestamp }
+                .take(limit)
+        )
+    }
+
+    override suspend fun setTranscript(
+        id: String,
+        transcript: String?,
+        status: TranscriptStatus,
+    ): Outcome<Unit, HistoryError> {
+        if (!writable) return Outcome.failure(HistoryError.Unavailable("test"))
+        val at = rows.indexOfFirst { it.id == id }
+        if (at < 0) return Outcome.failure(HistoryError.NotFound(id))
+        rows[at] = rows[at].copy(transcript = transcript, transcriptStatus = status)
+        return Outcome.success(Unit)
+    }
+
+    override suspend fun requestTranscripts(
+        ids: Collection<String>,
+    ): Outcome<Int, HistoryError> {
+        if (!writable) return Outcome.failure(HistoryError.Unavailable("test"))
+        var changed = 0
+        ids.forEach { id ->
+            val at = rows.indexOfFirst { it.id == id }
+            if (at >= 0) {
+                rows[at] = rows[at].copy(transcriptStatus = TranscriptStatus.PENDING)
+                changed++
+            }
+        }
+        return Outcome.success(changed)
+    }
+
     override suspend fun counts(): Outcome<HistoryCounts, HistoryError> =
         Outcome.success(HistoryCounts(rows.size, rows.count { it.isFavorite }))
 }

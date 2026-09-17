@@ -19,13 +19,29 @@
 # Task37 (Room): Room generates code and uses annotations. Its artifact ships
 #   consumer rules, so usually nothing is needed here.
 # Task07 (DataStore): if a serializer uses reflection, its model must be kept.
-# Task23 (Opus) / Task41 (Vosk): JNI entry points are reached from native code
-#   and are invisible to R8. Native-called classes and methods must be kept,
-#   e.g. -keepclasseswithmembernames class * { native <methods>; }
 # ---------------------------------------------------------------------------
 
 # JNI: methods called from native code cannot be renamed. Harmless before any
-# native library exists, and required from Task23 onward.
+# native library exists, and required from Task23 (Opus) onward.
 -keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }
+
+# sherpa-onnx (Task45, ADR-012). The rule above is not enough for this one.
+#
+# Its entry point is `newFromFile(config)`, and the native side reads that
+# config object's fields **by name** -- and the fields of the config objects
+# nested inside it, several levels down. R8 renames a field it can prove
+# nothing in Kotlin reads, which is exactly what those fields look like from
+# here, and the failure lands at runtime in a Release build only: the model
+# loads with empty paths and the recogniser refuses to construct.
+#
+# So this is broader than the file's own advice allows, and it is here without
+# a failure to point at: read from the library's Kotlin API at v1.13.8, not
+# observed. `includedescriptorclasses` above keeps the class *names* reachable
+# from the native signatures; nothing keeps their members.
+#
+# Narrow it once a Release build has actually run
+# (docs/11_ReleaseSignOff.md section 8) -- the package is small, and the cost of
+# keeping it whole is a few kilobytes against a crash nobody sees in Debug.
+-keep class com.k2fsa.sherpa.onnx.** { *; }

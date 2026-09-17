@@ -4,6 +4,8 @@ import com.saikai.ptt.core.config.SaikaiConfig
 import com.saikai.ptt.core.domain.DeviceIdentityProvider
 import com.saikai.ptt.core.common.subsystemScope
 import com.saikai.ptt.core.domain.HistoryRepository
+import com.saikai.ptt.core.asr.SpeechRecognizer
+import com.saikai.ptt.core.asr.TranscriptionQueue
 import com.saikai.ptt.core.history.ActiveRecordings
 import com.saikai.ptt.core.history.HistoryCleaner
 import com.saikai.ptt.core.history.HistoryEraser
@@ -15,6 +17,8 @@ import com.saikai.ptt.core.logger.LogSink
 import com.saikai.ptt.core.logger.Logger
 import com.saikai.ptt.locale.LocaleController
 import com.saikai.ptt.AppVisibility
+import com.saikai.ptt.asr.AsrModel
+import com.saikai.ptt.asr.SherpaRecognizer
 import com.saikai.ptt.audio.RecordingPlayback
 import com.saikai.ptt.storage.history.HistoryMaintenance
 import com.saikai.ptt.storage.history.LocalRecordingFiles
@@ -64,6 +68,9 @@ import com.saikai.ptt.usecase.SetAllowInterrupt
 import com.saikai.ptt.usecase.SetLanguage
 import com.saikai.ptt.usecase.SettingsUseCases
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.asCoroutineDispatcher
+import java.util.concurrent.Executors
 
 /**
  * Application-scope dependencies: the objects that live as long as the process.
@@ -346,6 +353,50 @@ class AppContainer(
             active = activeRecordings,
             logger = logger,
         )
+    }
+
+    /** Where the recognition model lives. Fetching it is Task46's. */
+    val asrModel: AsrModel by lazy {
+        val factory = filesDirFactory
+            ?: error("This container was built without a files directory")
+        AsrModel(factory())
+    }
+
+    /**
+     * What is waiting to be recognised.
+     *
+     * Application scope because the recorder fills it as calls end and the
+     * worker drains it, and those are different lifetimes: a recording made
+     * while the service was up should still be transcribed after it restarts.
+     */
+    val transcriptionQueue: TranscriptionQueue by lazy {
+        TranscriptionQueue(maxAttempts = config.history.asrMaxRetries)
+    }
+
+    /**
+     * The engine, on its own thread below the audio ones.
+     *
+     * `CLAUDE.md` section 18.3 puts voice above recognition unconditionally,
+     * and a single low-priority thread is how that is enforced rather than
+     * merely intended. Lazy, so a device with ASR off never constructs it.
+     */
+    val speechRecognizer: SpeechRecognizer by lazy {
+        SherpaRecognizer(
+            model = asrModel,
+            logger = logger,
+            dispatcher = asrDispatcher,
+            expectedSampleRateHz = config.audio.sampleRateHz,
+        )
+    }
+
+    private val asrDispatcher: ExecutorCoroutineDispatcher by lazy {
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "saikai-asr").apply {
+                // Below the recorder, which is itself below the audio threads.
+                priority = Thread.MIN_PRIORITY
+                isDaemon = true
+            }
+        }.asCoroutineDispatcher()
     }
 
     /**

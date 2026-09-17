@@ -213,6 +213,25 @@ class CommunicationService : Service() {
                 // after. Last, and deliberately not a lifecycle step: a device
                 // whose disk will not answer must still be able to receive.
                 app.historyMaintenance.start(scope)
+
+                // Subtitles, if the user asked for them and the model is here.
+                // Also not a lifecycle step, and for a stronger reason: this
+                // one loads a 150 MB model, and a device that cannot must
+                // still be a working walkie-talkie (CLAUDE.md 18.3).
+                scope.launch {
+                    val settings = app.settingsRepository.current()
+                    if (settings.asrEnabled && settings.asrModelReady) {
+                        // Anything left PENDING by a previous run, plus
+                        // anything the user asked for while the service was
+                        // down. Recordings finished from here on are submitted
+                        // by the recorder as they are stored.
+                        val queued = serviceContainer.transcription.sweep()
+                        if (queued > 0) {
+                            app.logger.i(LogCategory.ASR) { "$queued recordings to transcribe" }
+                        }
+                        serviceContainer.transcription.start(scope)
+                    }
+                }
             }
             is Outcome.Failure -> {
                 // Everything the sequence started has already been released.
@@ -230,6 +249,10 @@ class CommunicationService : Service() {
         // First: a cleanup pass starting while the recorder is being torn down
         // would see a temporary file whose claim is about to be released.
         appContainerOrNull()?.historyMaintenance?.stop()
+        // Gives the model back. The queue is in the application container and
+        // keeps what it holds, so a recording still waiting is picked up by
+        // the next sweep rather than lost.
+        container?.transcription?.stop()
         peerMirror?.cancel()
         peerMirror = null
         outcomeMirror?.cancel()

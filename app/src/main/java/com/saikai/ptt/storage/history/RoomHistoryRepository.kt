@@ -5,6 +5,7 @@ import com.saikai.ptt.core.domain.CommunicationRecord
 import com.saikai.ptt.core.domain.HistoryCounts
 import com.saikai.ptt.core.domain.HistoryError
 import com.saikai.ptt.core.domain.HistoryRepository
+import com.saikai.ptt.core.domain.TranscriptStatus
 import com.saikai.ptt.core.logger.LogCategory
 import com.saikai.ptt.core.logger.Logger
 import kotlinx.coroutines.CancellationException
@@ -137,6 +138,30 @@ class RoomHistoryRepository(
     ): Outcome<List<CommunicationRecord>, HistoryError> =
         guard("favorites") { dao.favorites(limit).map { it.toDomain() } }
 
+    override suspend fun pendingTranscripts(
+        limit: Int,
+    ): Outcome<List<CommunicationRecord>, HistoryError> =
+        guard("pendingTranscripts") {
+            dao.pendingTranscripts(TranscriptStatus.PENDING, limit).map { it.toDomain() }
+        }
+
+    override suspend fun setTranscript(
+        id: String,
+        transcript: String?,
+        status: TranscriptStatus,
+    ): Outcome<Unit, HistoryError> =
+        update(id) { dao.setTranscript(id, transcript, status, System.currentTimeMillis()) }
+
+    override suspend fun requestTranscripts(
+        ids: Collection<String>,
+    ): Outcome<Int, HistoryError> =
+        guard("requestTranscripts") {
+            val now = System.currentTimeMillis()
+            ids.distinct().chunked(SQLITE_VARIABLES).sumOf { batch ->
+                dao.requestTranscripts(batch, TranscriptStatus.PENDING, REQUESTABLE, now)
+            }
+        }
+
     override suspend fun counts(): Outcome<HistoryCounts, HistoryError> =
         guard("counts") { HistoryCounts(dao.count(), dao.favoriteCount()) }
 
@@ -196,5 +221,18 @@ class RoomHistoryRepository(
          * for the statement's own parameters and needs no version check.
          */
         const val SQLITE_VARIABLES = 900
+
+        /**
+         * Which states a record may be moved to PENDING from.
+         *
+         * Not PROCESSING: that one is out with the worker, and requeueing it
+         * would let two attempts run against the same recording. COMPLETED is
+         * included so a user who is unhappy with a transcript can ask again.
+         */
+        val REQUESTABLE = listOf(
+            TranscriptStatus.NOT_REQUESTED,
+            TranscriptStatus.FAILED,
+            TranscriptStatus.COMPLETED,
+        )
     }
 }

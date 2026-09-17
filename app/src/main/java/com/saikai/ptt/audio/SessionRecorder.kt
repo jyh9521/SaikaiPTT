@@ -79,6 +79,15 @@ class SessionRecorder(
     private val history: HistoryRepository,
     private val active: ActiveRecordings,
     private val onStorageError: (StorageError) -> Unit,
+    /**
+     * Called with the record id once a row is safely stored.
+     *
+     * The seam recognition hangs off. Here rather than inside this class
+     * because whether a recording should be transcribed is a setting, and the
+     * recorder has no business reading settings -- its one job is getting audio
+     * onto the disk without the realtime path waiting for it.
+     */
+    private val onStored: (String) -> Unit = {},
     private val logger: Logger,
     private val scope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,
@@ -369,10 +378,14 @@ class SessionRecorder(
         scope.launch {
             try {
                 when (val outcome = history.save(record)) {
-                    is Outcome.Success ->
+                    is Outcome.Success -> {
                         logger.i(LogCategory.STORAGE) {
                             "stored a ${record.durationMs}ms ${record.direction} record ($status)"
                         }
+                        // Only a record that actually has audio is worth
+                        // offering: a FAILED one has nothing to transcribe.
+                        if (audioPath != null) onStored(record.id)
+                    }
 
                     is Outcome.Failure -> {
                         // The audio stays. docs/05_DataModel.md section 34 calls

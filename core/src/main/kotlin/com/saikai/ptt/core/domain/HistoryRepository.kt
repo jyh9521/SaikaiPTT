@@ -111,6 +111,43 @@ interface HistoryRepository {
     /** How many records there are, and how many of them are favourites. */
     suspend fun counts(): Outcome<HistoryCounts, HistoryError>
 
+    /**
+     * Records waiting to be recognised, oldest first.
+     *
+     * Only ones with audio: a record whose recording was never written has
+     * nothing to transcribe, and leaving it PENDING forever would make the
+     * queue retry a file that does not exist.
+     *
+     * Oldest first because a backlog should drain in the order it accumulated;
+     * anything newly finished is enqueued directly and does not wait for a
+     * sweep (`core/asr/README.md`).
+     */
+    suspend fun pendingTranscripts(
+        limit: Int = TRANSCRIPT_BATCH,
+    ): Outcome<List<CommunicationRecord>, HistoryError>
+
+    /**
+     * Stores a recognition result, or the lack of one.
+     *
+     * One call rather than separate text and status writes, because a
+     * transcript without its status -- or a COMPLETED with no text -- is a row
+     * no screen knows how to draw.
+     */
+    suspend fun setTranscript(
+        id: String,
+        transcript: String?,
+        status: TranscriptStatus,
+    ): Outcome<Unit, HistoryError>
+
+    /**
+     * Moves every record in [ids] to PENDING so they will be recognised.
+     *
+     * Used when the user turns subtitles on, which is retrospective by design
+     * (`docs/04_UI_UX.md` section 29.1): enabling it offers to transcribe what
+     * is already there rather than only what happens next.
+     */
+    suspend fun requestTranscripts(ids: Collection<String>): Outcome<Int, HistoryError>
+
     companion object {
         const val DEFAULT_PAGE: Int = 200
 
@@ -123,6 +160,14 @@ interface HistoryRepository {
          * month of rows into memory to do it.
          */
         const val CLEANUP_BATCH: Int = 200
+
+        /**
+         * How many pending recordings one sweep reads.
+         *
+         * Smaller than [CLEANUP_BATCH]: recognition is serial and slow, so a
+         * sweep only needs enough to keep the worker busy until the next one.
+         */
+        const val TRANSCRIPT_BATCH: Int = 20
     }
 }
 

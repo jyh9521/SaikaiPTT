@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.saikai.ptt.core.domain.TranscriptStatus
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -138,6 +139,65 @@ interface CommunicationRecordDao {
         """
     )
     suspend fun favorites(limit: Int): List<CommunicationRecordEntity>
+
+    /**
+     * Recordings waiting to be recognised, oldest first.
+     *
+     * `audioPath IS NOT NULL` is part of the query: a record whose recording
+     * was never written has nothing to transcribe, and returning it would make
+     * the queue retry a file that does not exist until its allowance ran out.
+     *
+     * Served by the `transcriptStatus` index Task37 declared for exactly this
+     * (`docs/05_DataModel.md` section 27).
+     */
+    @Query(
+        """
+        SELECT * FROM communication_record
+        WHERE transcriptStatus = :pending AND audioPath IS NOT NULL
+        ORDER BY timestamp ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun pendingTranscripts(
+        pending: TranscriptStatus,
+        limit: Int,
+    ): List<CommunicationRecordEntity>
+
+    @Query(
+        """
+        UPDATE communication_record
+        SET transcript = :transcript, transcriptStatus = :status, updatedAt = :now
+        WHERE id = :id
+        """
+    )
+    suspend fun setTranscript(
+        id: String,
+        transcript: String?,
+        status: TranscriptStatus,
+        now: Long,
+    ): Int
+
+    /**
+     * Marks records for recognition.
+     *
+     * Only ones that have audio and are not already queued or done -- asking
+     * again for something already PROCESSING would let two workers pick it up.
+     */
+    @Query(
+        """
+        UPDATE communication_record
+        SET transcriptStatus = :pending, updatedAt = :now
+        WHERE id IN (:ids)
+          AND audioPath IS NOT NULL
+          AND transcriptStatus IN (:requestable)
+        """
+    )
+    suspend fun requestTranscripts(
+        ids: List<String>,
+        pending: TranscriptStatus,
+        requestable: List<TranscriptStatus>,
+        now: Long,
+    ): Int
 
     /** Every path the database points at, for the orphan scan (section 31). */
     @Query("SELECT audioPath FROM communication_record WHERE audioPath IS NOT NULL")

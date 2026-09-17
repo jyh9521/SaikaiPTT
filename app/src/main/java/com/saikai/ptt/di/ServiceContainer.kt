@@ -5,6 +5,7 @@ import com.saikai.ptt.audio.AndroidAudioFocus
 import com.saikai.ptt.audio.AndroidAudioPlayer
 import com.saikai.ptt.audio.AndroidAudioRecorder
 import com.saikai.ptt.audio.AndroidVoiceAudio
+import com.saikai.ptt.asr.TranscriptionWorker
 import com.saikai.ptt.audio.SessionRecorder
 import com.saikai.ptt.audio.OpusVoiceCodec
 import com.saikai.ptt.core.common.LifecycleStep
@@ -151,6 +152,26 @@ class ServiceContainer(
         app.localUsers.activeUser.stateIn(scope, SharingStarted.Eagerly, null)
 
     /**
+     * Turns finished recordings into subtitles, when the user has asked for
+     * them.
+     *
+     * Built here because it needs the session state and a codec factory, both
+     * of which are the service's; the queue and the engine it drives are in
+     * the application container, so a recording made before a restart is still
+     * waiting afterwards.
+     */
+    val transcription: TranscriptionWorker = TranscriptionWorker(
+        queue = app.transcriptionQueue,
+        recognizer = app.speechRecognizer,
+        history = app.history,
+        session = app.serviceStatus.session,
+        filesDir = service.filesDir,
+        codecs = ::newCodec,
+        sampleRateHz = app.config.audio.sampleRateHz,
+        logger = app.logger,
+    )
+
+    /**
      * Where both directions' audio is written down and filed.
      *
      * One recorder, not one per direction: PTT is half duplex, so at most one
@@ -165,6 +186,15 @@ class ServiceContainer(
         history = app.history,
         active = app.activeRecordings,
         onStorageError = app.serviceStatus::publishStorageError,
+        // Subtitles are off on every device until the user asks (CLAUDE.md
+        // 18.1) and useless without a model, so both are checked here rather
+        // than letting the queue fill with work that cannot run.
+        onStored = { recordId ->
+            val current = settings.value
+            if (current.asrEnabled && current.asrModelReady) {
+                transcription.submit(recordId)
+            }
+        },
         logger = app.logger,
         scope = scope,
     )
